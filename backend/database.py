@@ -14,9 +14,14 @@ engine = create_engine(
 
 @event.listens_for(engine, "connect")
 def load_spatialite(dbapi_conn, connection_record):
-    """Load SpatiaLite extension for geographic queries."""
-    dbapi_conn.enable_load_extension(True)
+    """Load SpatiaLite extension for geographic queries (optional)."""
+    # Check if extension loading is supported
+    if not hasattr(dbapi_conn, "enable_load_extension"):
+        # Extension loading not supported by this Python/SQLite build
+        return
+
     try:
+        dbapi_conn.enable_load_extension(True)
         # Try common SpatiaLite library paths
         spatialite_paths = [
             "mod_spatialite",
@@ -35,16 +40,15 @@ def load_spatialite(dbapi_conn, connection_record):
             except Exception:
                 continue
         if not loaded:
-            print(
-                "Warning: SpatiaLite extension not found. "
-                "Geographic queries will be limited. "
-                "Install spatialite: brew install spatialite-tools (macOS) "
-                "or apt-get install libsqlite3-mod-spatialite (Linux)"
-            )
-    except Exception as e:
-        print(f"Warning: Could not load SpatiaLite: {e}")
+            pass  # SpatiaLite not found, geographic queries will be limited
+    except (AttributeError, Exception):
+        # Extension loading not supported or failed
+        pass
     finally:
-        dbapi_conn.enable_load_extension(False)
+        try:
+            dbapi_conn.enable_load_extension(False)
+        except (AttributeError, Exception):
+            pass
 
 
 # Create session factory
@@ -66,7 +70,8 @@ def get_db():
 def init_db():
     """Initialize the database and create all tables."""
     # Import models here to ensure they're registered with Base
-    # from models import ...
+    from models.user import User  # noqa: F401
+
     Base.metadata.create_all(bind=engine)
 
     # Initialize SpatiaLite metadata if extension is loaded
