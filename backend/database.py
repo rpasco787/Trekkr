@@ -70,7 +70,20 @@ def get_db():
 def init_db():
     """Initialize the database and create all tables."""
     # Import models here to ensure they're registered with Base
-    from models.user import User  # noqa: F401
+    from models import (  # noqa: F401
+        Achievement,
+        CountryRegion,
+        Device,
+        H3Cell,
+        IngestBatch,
+        StateRegion,
+        User,
+        UserAchievement,
+        UserCellVisit,
+        UserCountryStat,
+        UserStateStat,
+        UserStreak,
+    )
 
     Base.metadata.create_all(bind=engine)
 
