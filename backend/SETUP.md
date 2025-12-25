@@ -52,15 +52,68 @@ The backend uses environment variables with defaults:
 You can create a `.env` file in the `backend` directory if you want to customize these values.
 
 ## Initialize the Docker Postgres/PostGIS Database
-The project ships with a PostGIS-enabled database in `docker-compose.yml`. This will create a Postgres container named `app-postgres` listening on host port `5433`.
+The project ships with a PostGIS-enabled database in `docker-compose.yml`. This creates a Postgres container named `app-postgres` listening on host port `5433`.
 
-### Exact commands based on this repo’s config
-- Start DB: `docker compose up -d db`
-- (Optional) set/override DB URL: `export DATABASE_URL=postgresql+psycopg2://appuser:apppass@localhost:5433/appdb`
-- Create tables: `alembic upgrade head`
-- List tables: `docker compose exec db psql -U appuser -d appdb -c "\dt"`
-- Inspect table: `docker compose exec db psql -U appuser -d appdb -c "\d users"` (replace `users` as needed; quit pager with `q`, exit psql with `\q`)
-- Stop DB: `docker compose down`
+### Quick Start (Fresh Database)
+On first run, Docker automatically initializes the database with:
+- PostGIS extension enabled
+- All tables created (users, regions, H3 cells, etc.)
+- 250 countries pre-seeded
+- 5,096 states/provinces pre-seeded (ISO 3166-2)
+
+```bash
+# Start the database (auto-initializes on first run)
+docker compose up -d db
+
+# Wait ~15 seconds for initialization scripts to complete
+sleep 15
+
+# Verify tables and seed data
+docker compose exec db psql -U appuser -d appdb -c "\dt"
+docker compose exec db psql -U appuser -d appdb -c "SELECT COUNT(*) FROM regions_country;"  # 250
+docker compose exec db psql -U appuser -d appdb -c "SELECT COUNT(*) FROM regions_state;"    # 5096
+```
+
+### Docker Init Scripts
+The `docker-init/` folder contains SQL scripts that run automatically in alphabetical order:
+| File | Purpose |
+|------|---------|
+| `00_extensions.sql` | Enables PostGIS extension |
+| `01_schema.sql` | Creates all database tables |
+| `02_seed_countries.sql` | Seeds 250 countries (ISO 3166-1) |
+| `03_seed_states.sql` | Seeds 5,096 states/provinces (ISO 3166-2) |
+
+### Common Commands
+```bash
+# Start database
+docker compose up -d db
+
+# Set DATABASE_URL for Python scripts
+export DATABASE_URL=postgresql+psycopg2://appuser:apppass@localhost:5433/appdb
+
+# List all tables
+docker compose exec db psql -U appuser -d appdb -c "\dt"
+
+# Inspect a table schema
+docker compose exec db psql -U appuser -d appdb -c "\d regions_state"
+
+# Query data
+docker compose exec db psql -U appuser -d appdb -c "SELECT code, name FROM regions_state WHERE code LIKE 'US-%' LIMIT 10;"
+
+# Stop database (preserves data)
+docker compose down
+
+# Reset database completely (deletes all data)
+docker compose down -v
+```
+
+### Manual Seeding (Development)
+If you need to re-seed data without resetting the container:
+```bash
+export DATABASE_URL=postgresql+psycopg2://appuser:apppass@localhost:5433/appdb
+python scripts/seed_countries.py
+python scripts/seed_states.py
+```
 
 ## Verify Installation
 Once the API server is running, you can:
