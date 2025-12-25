@@ -7,9 +7,12 @@ A location-based exploration app built with React Native (Expo) and FastAPI.
 ```
 Trekkr/
 ├── backend/          # FastAPI backend
+│   ├── alembic/      # Database migrations
+│   ├── data/         # Static data files (e.g., countries.json)
 │   ├── models/       # SQLAlchemy database models
 │   ├── routers/      # API route handlers
 │   ├── schemas/      # Pydantic request/response schemas
+│   ├── scripts/      # Utility scripts (e.g., seed_countries.py)
 │   ├── services/     # Business logic and utilities
 │   └── main.py       # FastAPI application entry point
 │
