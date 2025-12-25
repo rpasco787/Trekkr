@@ -16,12 +16,12 @@ depends_on = None
 
 # Natural Earth 1:10m data URLs
 NATURAL_EARTH_COUNTRIES_URL = (
-    "https://www.naturalearthdata.com/http//www.naturalearthdata.com/download/"
-    "10m/cultural/ne_10m_admin_0_countries.zip"
+    "https://naciscdn.org/naturalearth/10m/cultural/"
+    "ne_10m_admin_0_countries.zip"
 )
 NATURAL_EARTH_STATES_URL = (
-    "https://www.naturalearthdata.com/http//www.naturalearthdata.com/download/"
-    "10m/cultural/ne_10m_admin_1_states_provinces.zip"
+    "https://naciscdn.org/naturalearth/10m/cultural/"
+    "ne_10m_admin_1_states_provinces.zip"
 )
 
 
