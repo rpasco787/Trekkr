@@ -199,7 +199,7 @@ def populate_state_geometries(conn) -> tuple[int, int, list]:
     print(f"  Matched: {matched_count}")
     print(f"  Unmatched: {len(unmatched)}")
 
-    if unmatched and len(unmatched) <= 30:
+    if unmatched:
         print(f"  Sample unmatched: {', '.join(unmatched[:30])}")
 
     return matched_count, len(states_gdf), unmatched
