@@ -74,17 +74,24 @@ def populate_country_geometries(conn) -> tuple[int, int, list]:
         ne_name = str(row.get("NAME", "")).strip()
         geometry = row.geometry
 
-        # Skip invalid ISO codes
-        if ne_iso2 in ["-99", ""] or ne_iso3 in ["-99", ""]:
-            unmatched.append(f"{ne_name} (invalid ISO codes)")
-            continue
-
         # Find matching database country
         matched_id = None
-        for db_id, db_data in db_countries.items():
-            if db_data["iso2"].upper() == ne_iso2 or db_data["iso3"].upper() == ne_iso3:
-                matched_id = db_id
-                break
+
+        # Strategy 1: Try matching by ISO codes (if valid)
+        if ne_iso2 not in ["-99", ""] and ne_iso3 not in ["-99", ""]:
+            for db_id, db_data in db_countries.items():
+                if db_data["iso2"].upper() == ne_iso2 or db_data["iso3"].upper() == ne_iso3:
+                    matched_id = db_id
+                    break
+
+        # Strategy 2: Fallback to name matching for invalid ISO codes
+        if not matched_id and ne_name:
+            ne_name_norm = normalize_name(ne_name)
+            for db_id, db_data in db_countries.items():
+                db_name_norm = normalize_name(db_data["name"])
+                if db_name_norm == ne_name_norm:
+                    matched_id = db_id
+                    break
 
         if matched_id:
             # Convert geometry to WKB
