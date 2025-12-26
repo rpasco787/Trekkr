@@ -57,7 +57,8 @@ def seed_countries():
                     iso3=iso3,
                     name=name,
                     geom=None,  # Frontend has its own map
-                    land_cells_total=None,  # Calculate later when H3 data available
+                    land_cells_total_resolution6=None,  # Calculate later when H3 data available
+                    land_cells_total_resolution8=None,
                 )
                 db.add(new_country)
                 inserted += 1

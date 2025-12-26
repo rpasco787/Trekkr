@@ -47,7 +47,8 @@ class CountryRegion(Base):
     iso3 = Column(String(3), nullable=False, index=True)
     name = Column(String(128), nullable=False, index=True)
     geom = Column(_geom_column("MULTIPOLYGON"), nullable=True)
-    land_cells_total = Column(Integer, nullable=True)
+    land_cells_total_resolution6 = Column(Integer, nullable=True)
+    land_cells_total_resolution8 = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(
         DateTime,
@@ -77,7 +78,8 @@ class StateRegion(Base):
     code = Column(String(10), nullable=True, index=True)
     name = Column(String(128), nullable=False, index=True)
     geom = Column(_geom_column("MULTIPOLYGON"), nullable=True)
-    land_cells_total = Column(Integer, nullable=True)
+    land_cells_total_resolution6 = Column(Integer, nullable=True)
+    land_cells_total_resolution8 = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(
         DateTime,

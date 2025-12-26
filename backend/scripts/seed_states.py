@@ -74,7 +74,8 @@ def seed_states():
                     code=code,
                     name=name,
                     geom=None,  # Geometry can be added later
-                    land_cells_total=None,  # Calculate later when H3 data available
+                    land_cells_total_resolution6=None,  # Calculate later when H3 data available
+                    land_cells_total_resolution8=None,
                 )
                 db.add(new_state)
                 inserted += 1
