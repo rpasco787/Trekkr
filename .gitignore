@@ -39,3 +39,7 @@ build/
 # Node (for any root-level node files)
 node_modules/
 
+docs
+.claude
+# Git worktrees
+.worktrees/
