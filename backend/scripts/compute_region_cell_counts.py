@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compute H3 cell counts at resolutions 6 and 8 for all regions."""
+"""Compute H3 cell counts at resolutions 6 and 8 for all regions using area-based estimation."""
 
 import sys
 from pathlib import Path
@@ -8,73 +8,100 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import h3
-from shapely import wkb
-from shapely.geometry import mapping
-from sqlalchemy.orm import joinedload
+from sqlalchemy import text
 
 from database import SessionLocal
-from models.geo import CountryRegion, StateRegion
 
 
-def count_h3_cells_in_geometry(geom_wkb, resolution: int) -> int:
-    """Count H3 cells at given resolution that intersect with geometry.
+def get_average_cell_area(resolution: int) -> float:
+    """Get average H3 cell area in square meters for a given resolution.
 
-    Uses h3.polygon_to_cells which performs polyfill operation.
-    For MultiPolygon, combines cell counts from all polygons.
+    Args:
+        resolution: H3 resolution level (0-15)
+
+    Returns:
+        Average cell area in square meters
     """
-    if geom_wkb is None:
+    # h3.average_hexagon_area returns area in km² by default
+    area_km2 = h3.average_hexagon_area(resolution, unit="km^2")
+    # Convert km² to m²
+    area_m2 = area_km2 * 1_000_000
+    return area_m2
+
+
+def estimate_cell_count_for_region(db, table_name: str, region_id: int, resolution: int) -> int:
+    """Estimate H3 cell count for a region using area-based calculation.
+
+    Args:
+        db: Database session
+        table_name: Either 'country_regions' or 'state_regions'
+        region_id: ID of the region
+        resolution: H3 resolution level
+
+    Returns:
+        Estimated number of H3 cells
+    """
+    # Get region area in square meters using PostGIS
+    query = text(f"""
+        SELECT ST_Area(geom::geography) as area_m2
+        FROM {table_name}
+        WHERE id = :region_id
+    """)
+
+    result = db.execute(query, {"region_id": region_id}).fetchone()
+
+    if not result or result[0] is None:
         return 0
 
-    try:
-        shapely_geom = wkb.loads(bytes(geom_wkb.data))
+    region_area_m2 = result[0]
 
-        # Handle MultiPolygon by processing each polygon
-        if shapely_geom.geom_type == 'MultiPolygon':
-            all_cells = set()
-            for polygon in shapely_geom.geoms:
-                geojson = mapping(polygon)
-                cells = h3.polygon_to_cells(geojson, resolution)
-                all_cells.update(cells)
-            return len(all_cells)
+    # Get average cell area for this resolution
+    avg_cell_area_m2 = get_average_cell_area(resolution)
 
-        # Handle single Polygon
-        elif shapely_geom.geom_type == 'Polygon':
-            geojson = mapping(shapely_geom)
-            cells = h3.polygon_to_cells(geojson, resolution)
-            return len(cells)
+    # Estimate cell count
+    estimated_cells = int(region_area_m2 / avg_cell_area_m2)
 
-        else:
-            print(f"Unsupported geometry type: {shapely_geom.geom_type}")
-            return 0
-
-    except Exception as e:
-        print(f"Error counting H3 cells: {e}")
-        print(f"  Geometry type: {shapely_geom.geom_type}")
-        print(f"  Geometry bounds: {shapely_geom.bounds}")
-        return 0
+    return estimated_cells
 
 
 def compute_country_cells(db):
     """Compute and update cell counts for all countries."""
-    countries = db.query(CountryRegion).filter(
-        CountryRegion.geom.isnot(None)
-    ).all()
+    # Get all countries with geometries
+    query = text("""
+        SELECT id, name, iso3
+        FROM country_regions
+        WHERE geom IS NOT NULL
+        ORDER BY name
+    """)
+
+    countries = db.execute(query).fetchall()
 
     print(f"\nProcessing {len(countries)} countries...")
 
     for i, country in enumerate(countries, 1):
-        print(f"[{i}/{len(countries)}] {country.name} ({country.iso3})")
+        country_id, name, iso3 = country
+        print(f"[{i}/{len(countries)}] {name} ({iso3})")
 
-        # Compute cell counts at both resolutions
-        cells_r6 = count_h3_cells_in_geometry(country.geom, resolution=6)
-        cells_r8 = count_h3_cells_in_geometry(country.geom, resolution=8)
+        # Estimate cell counts at both resolutions
+        cells_r6 = estimate_cell_count_for_region(db, 'country_regions', country_id, resolution=6)
+        cells_r8 = estimate_cell_count_for_region(db, 'country_regions', country_id, resolution=8)
 
-        print(f"  Resolution 6: {cells_r6:,} cells")
-        print(f"  Resolution 8: {cells_r8:,} cells")
+        print(f"  Resolution 6: {cells_r6:,} cells (estimated)")
+        print(f"  Resolution 8: {cells_r8:,} cells (estimated)")
 
         # Update database
-        country.land_cells_total_resolution6 = cells_r6
-        country.land_cells_total_resolution8 = cells_r8
+        update_query = text("""
+            UPDATE country_regions
+            SET land_cells_total_resolution6 = :cells_r6,
+                land_cells_total_resolution8 = :cells_r8
+            WHERE id = :country_id
+        """)
+
+        db.execute(update_query, {
+            "cells_r6": cells_r6,
+            "cells_r8": cells_r8,
+            "country_id": country_id
+        })
 
         # Periodic commits every 50 countries
         if i % 50 == 0:
@@ -87,26 +114,44 @@ def compute_country_cells(db):
 
 def compute_state_cells(db):
     """Compute and update cell counts for all states."""
-    states = db.query(StateRegion).options(
-        joinedload(StateRegion.country)
-    ).filter(StateRegion.geom.isnot(None)).all()
+    # Get all states with geometries
+    query = text("""
+        SELECT s.id, s.name, c.name as country_name
+        FROM state_regions s
+        LEFT JOIN country_regions c ON s.country_id = c.id
+        WHERE s.geom IS NOT NULL
+        ORDER BY c.name, s.name
+    """)
+
+    states = db.execute(query).fetchall()
 
     print(f"\nProcessing {len(states)} states/regions...")
 
     for i, state in enumerate(states, 1):
-        country_name = state.country.name if state.country else "Unknown"
-        print(f"[{i}/{len(states)}] {state.name}, {country_name}")
+        state_id, name, country_name = state
+        country_name = country_name or "Unknown"
+        print(f"[{i}/{len(states)}] {name}, {country_name}")
 
-        # Compute cell counts at both resolutions
-        cells_r6 = count_h3_cells_in_geometry(state.geom, resolution=6)
-        cells_r8 = count_h3_cells_in_geometry(state.geom, resolution=8)
+        # Estimate cell counts at both resolutions
+        cells_r6 = estimate_cell_count_for_region(db, 'state_regions', state_id, resolution=6)
+        cells_r8 = estimate_cell_count_for_region(db, 'state_regions', state_id, resolution=8)
 
-        print(f"  Resolution 6: {cells_r6:,} cells")
-        print(f"  Resolution 8: {cells_r8:,} cells")
+        print(f"  Resolution 6: {cells_r6:,} cells (estimated)")
+        print(f"  Resolution 8: {cells_r8:,} cells (estimated)")
 
         # Update database
-        state.land_cells_total_resolution6 = cells_r6
-        state.land_cells_total_resolution8 = cells_r8
+        update_query = text("""
+            UPDATE state_regions
+            SET land_cells_total_resolution6 = :cells_r6,
+                land_cells_total_resolution8 = :cells_r8
+            WHERE id = :state_id
+        """)
+
+        db.execute(update_query, {
+            "cells_r6": cells_r6,
+            "cells_r8": cells_r8,
+            "state_id": state_id
+        })
 
         # Periodic commits every 50 states
         if i % 50 == 0:
@@ -123,7 +168,7 @@ def main():
 
     try:
         print("=" * 80)
-        print("H3 CELL COUNT COMPUTATION")
+        print("H3 CELL COUNT COMPUTATION (Area-Based Estimation)")
         print("=" * 80)
 
         # Compute for countries
@@ -138,6 +183,8 @@ def main():
 
     except Exception as e:
         print(f"\n❌ Error: {e}")
+        import traceback
+        traceback.print_exc()
         db.rollback()
         sys.exit(1)
     finally:
