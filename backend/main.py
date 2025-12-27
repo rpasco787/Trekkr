@@ -2,9 +2,12 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 from database import init_db
-from routers import auth, health
+from routers import auth, health, location
+from routers.location import limiter
 
 
 @asynccontextmanager
@@ -15,12 +18,17 @@ async def lifespan(app: FastAPI):
     yield
     # Shutdown: Cleanup if needed
 
+
 app = FastAPI(
     title="Trekkr API",
     description="Backend API for Trekkr",
     version="1.0.0",
     lifespan=lifespan,
 )
+
+# Configure rate limiter
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS middleware configuration
 # Update origins list when frontend is available
@@ -42,9 +50,9 @@ app.add_middleware(
 # Include routers
 app.include_router(health.router, prefix="/api", tags=["health"])
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
+app.include_router(location.router, prefix="/api/v1/location", tags=["location"])
 
 
 @app.get("/")
 async def root():
     return {"message": "Welcome to Trekkr API"}
-

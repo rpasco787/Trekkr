@@ -1,2 +1,1 @@
-# Routers package
-
+from . import auth, health, location
