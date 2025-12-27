@@ -1,0 +1,96 @@
+"""Location ingestion API endpoint."""
+
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from sqlalchemy.orm import Session
+import h3
+
+from database import get_db
+from models.user import User
+from models.device import Device
+from schemas.location import LocationIngestRequest, LocationIngestResponse
+from services.auth import get_current_user
+from services.location_processor import LocationProcessor
+
+
+def get_user_id_from_request(request: Request) -> str:
+    """Extract user ID for rate limiting key."""
+    # During rate limit check, user may not be authenticated yet
+    # Fall back to IP address if no user context
+    if hasattr(request.state, "user_id"):
+        return str(request.state.user_id)
+    return get_remote_address(request)
+
+
+limiter = Limiter(key_func=get_user_id_from_request)
+router = APIRouter()
+
+
+@router.post("/ingest", response_model=LocationIngestResponse)
+@limiter.limit("120/minute")
+def ingest_location(
+    request: Request,
+    payload: LocationIngestRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Ingest a location update and record H3 cell visits.
+
+    The client should send this request when the user moves to a new H3 res-8 cell.
+    The server will:
+    1. Derive the parent res-6 cell
+    2. Perform reverse geocoding to find country/state
+    3. Record visits for both resolutions
+    4. Return discovery summary (new vs. revisited entities)
+
+    Rate limit: 120 requests per minute per user.
+    """
+    # Store user_id in request state for rate limiting
+    request.state.user_id = current_user.id
+
+    # Validate H3 index matches coordinates (with neighbor tolerance for GPS jitter)
+    expected_h3 = h3.latlng_to_cell(payload.latitude, payload.longitude, 8)
+    if payload.h3_res8 != expected_h3:
+        # Check if it's a neighbor (handles GPS jitter at cell boundaries)
+        neighbors = h3.grid_ring(expected_h3, 1)
+        if payload.h3_res8 not in neighbors:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "error": "h3_mismatch",
+                    "message": "H3 index does not match coordinates",
+                    "expected": expected_h3,
+                    "received": payload.h3_res8,
+                },
+            )
+
+    # Resolve device_id if provided
+    device_id = None
+    if payload.device_id:
+        device = db.query(Device).filter(
+            Device.device_uuid == payload.device_id,
+            Device.user_id == current_user.id,
+        ).first()
+        if device:
+            device_id = device.id
+
+    # Process the location
+    processor = LocationProcessor(db, current_user.id)
+
+    try:
+        result = processor.process_location(
+            latitude=payload.latitude,
+            longitude=payload.longitude,
+            h3_res8=payload.h3_res8,
+            device_id=device_id,
+            timestamp=payload.timestamp,
+        )
+        return result
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"error": "service_unavailable", "message": str(e)},
+        )
