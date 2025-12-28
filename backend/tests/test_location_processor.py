@@ -47,13 +47,15 @@ class TestProcessLocation:
         """Test processing a location for the first time."""
         # Mock reverse geocoding to return country and state
         mock_db_session.execute.side_effect = [
-            # Reverse geocode query
+            # 1. Reverse geocode query
             Mock(
                 fetchone=Mock(
                     return_value=Mock(country_id=1, state_id=5)
                 )
             ),
-            # First UPSERT (res-6)
+            # 2. First UPSERT (res-6) - h3_cells table (no fetchone)
+            Mock(),
+            # 3. First UPSERT (res-6) - user_cell_visits table (with fetchone)
             Mock(
                 fetchone=Mock(
                     return_value=Mock(
@@ -64,7 +66,9 @@ class TestProcessLocation:
                     )
                 )
             ),
-            # Second UPSERT (res-8)
+            # 4. Second UPSERT (res-8) - h3_cells table (no fetchone)
+            Mock(),
+            # 5. Second UPSERT (res-8) - user_cell_visits table (with fetchone)
             Mock(
                 fetchone=Mock(
                     return_value=Mock(
@@ -75,15 +79,22 @@ class TestProcessLocation:
                     )
                 )
             ),
-            # Query for other cells in country
+            # 6. Query for other cells in country
             Mock(fetchone=Mock(return_value=None)),
-            # Query for other cells in state
+            # 7. Query for other cells in state
             Mock(fetchone=Mock(return_value=None)),
         ]
 
-        # Mock country and state objects
-        mock_country = Mock(spec=CountryRegion, id=1, name="United States", iso2="US")
-        mock_state = Mock(spec=StateRegion, id=5, name="California", code="CA")
+        # Mock country and state objects - set attributes explicitly
+        mock_country = Mock(spec=CountryRegion)
+        mock_country.id = 1
+        mock_country.name = "United States"
+        mock_country.iso2 = "US"
+
+        mock_state = Mock(spec=StateRegion)
+        mock_state.id = 5
+        mock_state.name = "California"
+        mock_state.code = "CA"
 
         mock_db_session.query.return_value.filter.return_value.first.side_effect = [
             mock_country,
@@ -125,12 +136,19 @@ class TestProcessLocation:
         """Test that res-6 cell is correctly derived from res-8."""
         expected_res6 = h3.cell_to_parent(SAN_FRANCISCO["h3_res8"], 6)
 
-        # Mock minimal responses
+        # Mock minimal responses - 5 execute calls total
         mock_db_session.execute.side_effect = [
+            # 1. Reverse geocode
             Mock(fetchone=Mock(return_value=Mock(country_id=None, state_id=None))),
+            # 2. Res-6 UPSERT - h3_cells (no fetchone)
+            Mock(),
+            # 3. Res-6 UPSERT - user_cell_visits (with fetchone)
             Mock(fetchone=Mock(return_value=Mock(
                 h3_index=expected_res6, res=6, visit_count=1, was_inserted=True
             ))),
+            # 4. Res-8 UPSERT - h3_cells (no fetchone)
+            Mock(),
+            # 5. Res-8 UPSERT - user_cell_visits (with fetchone)
             Mock(fetchone=Mock(return_value=Mock(
                 h3_index=SAN_FRANCISCO["h3_res8"], res=8, visit_count=1, was_inserted=True
             ))),
@@ -152,10 +170,17 @@ class TestProcessLocation:
         custom_timestamp = datetime(2024, 1, 15, 12, 30, 0)
 
         mock_db_session.execute.side_effect = [
+            # 1. Reverse geocode
             Mock(fetchone=Mock(return_value=Mock(country_id=None, state_id=None))),
+            # 2. Res-6 UPSERT - h3_cells (no fetchone)
+            Mock(),
+            # 3. Res-6 UPSERT - user_cell_visits (with fetchone)
             Mock(fetchone=Mock(return_value=Mock(
                 h3_index=SAN_FRANCISCO["h3_res6"], res=6, visit_count=1, was_inserted=True
             ))),
+            # 4. Res-8 UPSERT - h3_cells (no fetchone)
+            Mock(),
+            # 5. Res-8 UPSERT - user_cell_visits (with fetchone)
             Mock(fetchone=Mock(return_value=Mock(
                 h3_index=SAN_FRANCISCO["h3_res8"], res=8, visit_count=1, was_inserted=True
             ))),
@@ -176,10 +201,17 @@ class TestProcessLocation:
     ):
         """Test processing location without device_id."""
         mock_db_session.execute.side_effect = [
+            # 1. Reverse geocode
             Mock(fetchone=Mock(return_value=Mock(country_id=None, state_id=None))),
+            # 2. Res-6 UPSERT - h3_cells (no fetchone)
+            Mock(),
+            # 3. Res-6 UPSERT - user_cell_visits (with fetchone)
             Mock(fetchone=Mock(return_value=Mock(
                 h3_index=SAN_FRANCISCO["h3_res6"], res=6, visit_count=1, was_inserted=True
             ))),
+            # 4. Res-8 UPSERT - h3_cells (no fetchone)
+            Mock(),
+            # 5. Res-8 UPSERT - user_cell_visits (with fetchone)
             Mock(fetchone=Mock(return_value=Mock(
                 h3_index=SAN_FRANCISCO["h3_res8"], res=8, visit_count=1, was_inserted=True
             ))),
@@ -372,9 +404,16 @@ class TestBuildResponse:
             "is_new": True,
         }
 
-        # Mock country/state queries
-        mock_country = Mock(spec=CountryRegion, id=1, name="United States", iso2="US")
-        mock_state = Mock(spec=StateRegion, id=5, name="California", code="CA")
+        # Mock country/state queries - set attributes explicitly
+        mock_country = Mock(spec=CountryRegion)
+        mock_country.id = 1
+        mock_country.name = "United States"
+        mock_country.iso2 = "US"
+
+        mock_state = Mock(spec=StateRegion)
+        mock_state.id = 5
+        mock_state.name = "California"
+        mock_state.code = "CA"
 
         mock_db_session.query.return_value.filter.return_value.first.side_effect = [
             mock_country,
