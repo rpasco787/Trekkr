@@ -20,6 +20,8 @@ class Device(Base):
         nullable=False,
         index=True,
     )
+    device_uuid = Column(String(255), unique=True, nullable=True, index=True)
+    device_name = Column(String(255), nullable=True)
     platform = Column(String(50), nullable=True)
     app_version = Column(String(50), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)

@@ -5,6 +5,10 @@ for both unit and integration tests.
 """
 
 import os
+
+# CRITICAL: Set SECRET_KEY BEFORE any other imports that might use config
+os.environ["SECRET_KEY"] = "test-secret-key"
+
 from datetime import datetime, timedelta
 from typing import Generator, Optional
 from unittest.mock import MagicMock, Mock
@@ -99,7 +103,6 @@ def mock_db_session() -> MagicMock:
 def test_user(db_session: Session) -> User:
     """Create a test user for integration tests."""
     user = User(
-        id=1,
         username="test_user",
         email="test@example.com",
         hashed_password="$2b$12$hashedpassword",  # bcrypt hash
@@ -114,7 +117,6 @@ def test_user(db_session: Session) -> User:
 def test_user2(db_session: Session) -> User:
     """Create a second test user for multi-user tests."""
     user = User(
-        id=2,
         username="test_user2",
         email="test2@example.com",
         hashed_password="$2b$12$hashedpassword2",
@@ -129,7 +131,6 @@ def test_user2(db_session: Session) -> User:
 def test_device(db_session: Session, test_user: User) -> Device:
     """Create a test device linked to test_user."""
     device = Device(
-        id=1,
         user_id=test_user.id,
         device_uuid="test-device-uuid-1234",
         device_name="Test iPhone",
@@ -160,12 +161,14 @@ def test_country_usa(db_session: Session) -> CountryRegion:
     """Create USA country record for integration tests."""
     # Simple polygon covering San Francisco area
     country = db_session.execute(text("""
-        INSERT INTO regions_country (name, iso2, iso3, geom)
+        INSERT INTO regions_country (name, iso2, iso3, geom, created_at, updated_at)
         VALUES (
             'United States',
             'US',
             'USA',
-            ST_GeomFromText('POLYGON((-125 30, -125 50, -115 50, -115 30, -125 30))', 4326)
+            ST_GeomFromText('POLYGON((-125 30, -125 50, -115 50, -115 30, -125 30))', 4326),
+            CURRENT_TIMESTAMP,
+            CURRENT_TIMESTAMP
         )
         RETURNING id, name, iso2, iso3
     """)).fetchone()
@@ -184,12 +187,14 @@ def test_country_usa(db_session: Session) -> CountryRegion:
 def test_state_california(db_session: Session, test_country_usa: CountryRegion) -> StateRegion:
     """Create California state record for integration tests."""
     state = db_session.execute(text("""
-        INSERT INTO regions_state (name, code, country_id, geom)
+        INSERT INTO regions_state (name, code, country_id, geom, created_at, updated_at)
         VALUES (
             'California',
             'CA',
             :country_id,
-            ST_GeomFromText('POLYGON((-125 32, -125 42, -114 42, -114 32, -125 32))', 4326)
+            ST_GeomFromText('POLYGON((-125 32, -125 42, -114 42, -114 32, -125 32))', 4326),
+            CURRENT_TIMESTAMP,
+            CURRENT_TIMESTAMP
         )
         RETURNING id, name, code, country_id
     """), {"country_id": test_country_usa.id}).fetchone()
@@ -208,12 +213,14 @@ def test_state_california(db_session: Session, test_country_usa: CountryRegion) 
 def test_country_japan(db_session: Session) -> CountryRegion:
     """Create Japan country record for integration tests."""
     country = db_session.execute(text("""
-        INSERT INTO regions_country (name, iso2, iso3, geom)
+        INSERT INTO regions_country (name, iso2, iso3, geom, created_at, updated_at)
         VALUES (
             'Japan',
             'JP',
             'JPN',
-            ST_GeomFromText('POLYGON((135 30, 135 40, 145 40, 145 30, 135 30))', 4326)
+            ST_GeomFromText('POLYGON((135 30, 135 40, 145 40, 145 30, 135 30))', 4326),
+            CURRENT_TIMESTAMP,
+            CURRENT_TIMESTAMP
         )
         RETURNING id, name, iso2, iso3
     """)).fetchone()
@@ -267,6 +274,7 @@ def valid_jwt_token(test_user: User, jwt_secret_key: str) -> str:
         "sub": str(test_user.id),
         "username": test_user.username,
         "exp": datetime.utcnow() + timedelta(hours=1),
+        "type": "access",  # Required by get_current_user
     }
     return jwt.encode(payload, jwt_secret_key, algorithm="HS256")
 
@@ -320,6 +328,7 @@ def create_jwt_token(user_id: int, username: str, secret_key: str = "test-secret
         "sub": str(user_id),
         "username": username,
         "exp": datetime.utcnow() + timedelta(hours=1),
+        "type": "access",  # Required by get_current_user
     }
     return jwt.encode(payload, secret_key, algorithm="HS256")
 

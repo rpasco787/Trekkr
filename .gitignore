@@ -1,5 +1,6 @@
 # Python
 __pycache__/
+*.pyc
 *.py[cod]
 *$py.class
 *.so
@@ -39,7 +40,10 @@ build/
 # Node (for any root-level node files)
 node_modules/
 
-docs
+/docs/
 .claude
+claude.md
 # Git worktrees
 .worktrees/
+
+backend/scripts/test*

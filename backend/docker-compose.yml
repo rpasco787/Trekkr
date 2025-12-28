@@ -12,5 +12,18 @@ services:
       - pgdata:/var/lib/postgresql/data
       - ./docker-init:/docker-entrypoint-initdb.d
 
+  db-test:
+    image: postgis/postgis:16-3.4
+    container_name: app-postgres-test
+    environment:
+      POSTGRES_USER: appuser
+      POSTGRES_PASSWORD: apppass
+      POSTGRES_DB: appdb_test
+    ports:
+      - "5434:5432"
+    volumes:
+      - pgdata-test:/var/lib/postgresql/data
+
 volumes:
   pgdata:
+  pgdata-test:

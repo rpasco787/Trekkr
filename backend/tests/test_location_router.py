@@ -44,7 +44,7 @@ class TestRequestValidation:
         token = create_jwt_token(test_user.id, test_user.username)
 
         response = client.post(
-            "/api/location/ingest",
+            "/api/v1/location/ingest",
             json={
                 "latitude": SAN_FRANCISCO["latitude"],
                 "longitude": SAN_FRANCISCO["longitude"],
@@ -67,7 +67,7 @@ class TestRequestValidation:
 
         # Latitude > 90
         response = client.post(
-            "/api/location/ingest",
+            "/api/v1/location/ingest",
             json={
                 "latitude": 91.0,
                 "longitude": 0.0,
@@ -79,7 +79,7 @@ class TestRequestValidation:
 
         # Latitude < -90
         response = client.post(
-            "/api/location/ingest",
+            "/api/v1/location/ingest",
             json={
                 "latitude": -91.0,
                 "longitude": 0.0,
@@ -95,7 +95,7 @@ class TestRequestValidation:
 
         # Longitude > 180
         response = client.post(
-            "/api/location/ingest",
+            "/api/v1/location/ingest",
             json={
                 "latitude": 0.0,
                 "longitude": 181.0,
@@ -107,7 +107,7 @@ class TestRequestValidation:
 
         # Longitude < -180
         response = client.post(
-            "/api/location/ingest",
+            "/api/v1/location/ingest",
             json={
                 "latitude": 0.0,
                 "longitude": -181.0,
@@ -122,7 +122,7 @@ class TestRequestValidation:
         token = create_jwt_token(test_user.id, test_user.username)
 
         response = client.post(
-            "/api/location/ingest",
+            "/api/v1/location/ingest",
             json={
                 "latitude": SAN_FRANCISCO["latitude"],
                 "longitude": SAN_FRANCISCO["longitude"],
@@ -138,7 +138,7 @@ class TestRequestValidation:
 
         # Use res-6 instead of res-8
         response = client.post(
-            "/api/location/ingest",
+            "/api/v1/location/ingest",
             json={
                 "latitude": SAN_FRANCISCO["latitude"],
                 "longitude": SAN_FRANCISCO["longitude"],
@@ -154,7 +154,7 @@ class TestRequestValidation:
 
         # Missing latitude
         response = client.post(
-            "/api/location/ingest",
+            "/api/v1/location/ingest",
             json={
                 "longitude": SAN_FRANCISCO["longitude"],
                 "h3_res8": SAN_FRANCISCO["h3_res8"],
@@ -165,7 +165,7 @@ class TestRequestValidation:
 
         # Missing h3_res8
         response = client.post(
-            "/api/location/ingest",
+            "/api/v1/location/ingest",
             json={
                 "latitude": SAN_FRANCISCO["latitude"],
                 "longitude": SAN_FRANCISCO["longitude"],
@@ -191,7 +191,7 @@ class TestH3CoordinateValidation:
         token = create_jwt_token(test_user.id, test_user.username)
 
         response = client.post(
-            "/api/location/ingest",
+            "/api/v1/location/ingest",
             json={
                 "latitude": SAN_FRANCISCO["latitude"],
                 "longitude": SAN_FRANCISCO["longitude"],
@@ -216,7 +216,7 @@ class TestH3CoordinateValidation:
 
         # Use a neighbor instead of exact match
         response = client.post(
-            "/api/location/ingest",
+            "/api/v1/location/ingest",
             json={
                 "latitude": SAN_FRANCISCO["latitude"],
                 "longitude": SAN_FRANCISCO["longitude"],
@@ -235,7 +235,7 @@ class TestH3CoordinateValidation:
 
         # Use Tokyo's H3 cell for San Francisco coordinates
         response = client.post(
-            "/api/location/ingest",
+            "/api/v1/location/ingest",
             json={
                 "latitude": SAN_FRANCISCO["latitude"],
                 "longitude": SAN_FRANCISCO["longitude"],
@@ -267,7 +267,7 @@ class TestAuthentication:
     def test_no_token_returns_401(self, client: TestClient):
         """Test that request without JWT token returns 401."""
         response = client.post(
-            "/api/location/ingest",
+            "/api/v1/location/ingest",
             json={
                 "latitude": SAN_FRANCISCO["latitude"],
                 "longitude": SAN_FRANCISCO["longitude"],
@@ -280,7 +280,7 @@ class TestAuthentication:
     def test_invalid_token_returns_401(self, client: TestClient):
         """Test that request with invalid token returns 401."""
         response = client.post(
-            "/api/location/ingest",
+            "/api/v1/location/ingest",
             json={
                 "latitude": SAN_FRANCISCO["latitude"],
                 "longitude": SAN_FRANCISCO["longitude"],
@@ -296,7 +296,7 @@ class TestAuthentication:
     ):
         """Test that request with expired token returns 401."""
         response = client.post(
-            "/api/location/ingest",
+            "/api/v1/location/ingest",
             json={
                 "latitude": SAN_FRANCISCO["latitude"],
                 "longitude": SAN_FRANCISCO["longitude"],
@@ -314,7 +314,7 @@ class TestAuthentication:
         token = create_jwt_token(test_user.id, test_user.username)
 
         response = client.post(
-            "/api/location/ingest",
+            "/api/v1/location/ingest",
             json={
                 "latitude": SAN_FRANCISCO["latitude"],
                 "longitude": SAN_FRANCISCO["longitude"],
@@ -345,7 +345,7 @@ class TestRateLimiting:
         # Send 5 requests (well under 120/min limit)
         for i in range(5):
             response = client.post(
-                "/api/location/ingest",
+                "/api/v1/location/ingest",
                 json={
                     "latitude": SAN_FRANCISCO["latitude"],
                     "longitude": SAN_FRANCISCO["longitude"],
@@ -365,7 +365,7 @@ class TestRateLimiting:
         # Send 121 requests rapidly
         for i in range(121):
             response = client.post(
-                "/api/location/ingest",
+                "/api/v1/location/ingest",
                 json={
                     "latitude": SAN_FRANCISCO["latitude"],
                     "longitude": SAN_FRANCISCO["longitude"],
@@ -394,7 +394,7 @@ class TestRateLimiting:
         # User 1 makes 5 requests
         for _ in range(5):
             response = client.post(
-                "/api/location/ingest",
+                "/api/v1/location/ingest",
                 json={
                     "latitude": SAN_FRANCISCO["latitude"],
                     "longitude": SAN_FRANCISCO["longitude"],
@@ -406,7 +406,7 @@ class TestRateLimiting:
 
         # User 2 should still be able to make requests
         response = client.post(
-            "/api/location/ingest",
+            "/api/v1/location/ingest",
             json={
                 "latitude": SAN_FRANCISCO["latitude"],
                 "longitude": SAN_FRANCISCO["longitude"],
@@ -436,7 +436,7 @@ class TestDeviceHandling:
         token = create_jwt_token(test_user.id, test_user.username)
 
         response = client.post(
-            "/api/location/ingest",
+            "/api/v1/location/ingest",
             json={
                 "latitude": SAN_FRANCISCO["latitude"],
                 "longitude": SAN_FRANCISCO["longitude"],
@@ -472,7 +472,7 @@ class TestDeviceHandling:
 
         # User 1 tries to use User 2's device
         response = client.post(
-            "/api/location/ingest",
+            "/api/v1/location/ingest",
             json={
                 "latitude": SAN_FRANCISCO["latitude"],
                 "longitude": SAN_FRANCISCO["longitude"],
@@ -492,7 +492,7 @@ class TestDeviceHandling:
         token = create_jwt_token(test_user.id, test_user.username)
 
         response = client.post(
-            "/api/location/ingest",
+            "/api/v1/location/ingest",
             json={
                 "latitude": SAN_FRANCISCO["latitude"],
                 "longitude": SAN_FRANCISCO["longitude"],
@@ -512,7 +512,7 @@ class TestDeviceHandling:
         token = create_jwt_token(test_user.id, test_user.username)
 
         response = client.post(
-            "/api/location/ingest",
+            "/api/v1/location/ingest",
             json={
                 "latitude": SAN_FRANCISCO["latitude"],
                 "longitude": SAN_FRANCISCO["longitude"],
@@ -545,7 +545,7 @@ class TestDiscoveryFlow:
         token = create_jwt_token(test_user.id, test_user.username)
 
         response = client.post(
-            "/api/location/ingest",
+            "/api/v1/location/ingest",
             json={
                 "latitude": SAN_FRANCISCO["latitude"],
                 "longitude": SAN_FRANCISCO["longitude"],
@@ -584,7 +584,7 @@ class TestDiscoveryFlow:
 
         # First visit: San Francisco
         client.post(
-            "/api/location/ingest",
+            "/api/v1/location/ingest",
             json={
                 "latitude": SAN_FRANCISCO["latitude"],
                 "longitude": SAN_FRANCISCO["longitude"],
@@ -595,7 +595,7 @@ class TestDiscoveryFlow:
 
         # Second visit: Los Angeles (same country and state)
         response = client.post(
-            "/api/location/ingest",
+            "/api/v1/location/ingest",
             json={
                 "latitude": LOS_ANGELES["latitude"],
                 "longitude": LOS_ANGELES["longitude"],
@@ -627,7 +627,7 @@ class TestDiscoveryFlow:
 
         # First visit
         response1 = client.post(
-            "/api/location/ingest",
+            "/api/v1/location/ingest",
             json={
                 "latitude": SAN_FRANCISCO["latitude"],
                 "longitude": SAN_FRANCISCO["longitude"],
@@ -639,7 +639,7 @@ class TestDiscoveryFlow:
 
         # Revisit same location
         response2 = client.post(
-            "/api/location/ingest",
+            "/api/v1/location/ingest",
             json={
                 "latitude": SAN_FRANCISCO["latitude"],
                 "longitude": SAN_FRANCISCO["longitude"],
@@ -672,7 +672,7 @@ class TestDiscoveryFlow:
         token = create_jwt_token(test_user.id, test_user.username)
 
         response = client.post(
-            "/api/location/ingest",
+            "/api/v1/location/ingest",
             json={
                 "latitude": INTERNATIONAL_WATERS["latitude"],
                 "longitude": INTERNATIONAL_WATERS["longitude"],
