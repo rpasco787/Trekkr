@@ -57,6 +57,9 @@ class UserInfoResponse(BaseModel):
     username: str
     created_at: datetime
 
+    class Config:
+        from_attributes = True
+
 
 class StatsResponse(BaseModel):
     """Aggregate travel statistics."""
