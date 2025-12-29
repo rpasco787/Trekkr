@@ -13,6 +13,7 @@ ENV/
 .venv
 *.db
 *.sqlite
+*.coverage
 *.sqlite3
 
 # Environment variables
