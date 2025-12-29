@@ -198,3 +198,40 @@ class TestStatsRegionsEndpoint:
         assert data["regions"][0]["name"] == "California"
         assert data["regions"][0]["country_code"] == "US"
         assert data["regions"][0]["coverage_pct"] == 0.002
+
+
+@pytest.mark.integration
+class TestStatsOverviewEndpoint:
+    """Test GET /api/v1/stats/overview endpoint."""
+
+    def test_overview_for_new_user_returns_zeros(
+        self, client: TestClient, test_user: User
+    ):
+        """New user with no visits should get zeros and empty arrays."""
+        token = create_jwt_token(test_user.id, test_user.username)
+
+        response = client.get(
+            "/api/v1/stats/overview",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # User info should be present
+        assert data["user"]["id"] == test_user.id
+        assert data["user"]["username"] == test_user.username
+        assert data["user"]["created_at"] is not None
+
+        # Stats should all be zero
+        assert data["stats"]["countries_visited"] == 0
+        assert data["stats"]["regions_visited"] == 0
+        assert data["stats"]["cells_visited_res6"] == 0
+        assert data["stats"]["cells_visited_res8"] == 0
+        assert data["stats"]["total_visit_count"] == 0
+        assert data["stats"]["first_visit_at"] is None
+        assert data["stats"]["last_visit_at"] is None
+
+        # Recent lists should be empty
+        assert data["recent_countries"] == []
+        assert data["recent_regions"] == []
