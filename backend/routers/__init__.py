@@ -1,1 +1,1 @@
-from . import auth, health, location
+from . import auth, health, location, map
