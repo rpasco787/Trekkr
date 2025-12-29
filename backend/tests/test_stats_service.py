@@ -1,0 +1,130 @@
+"""Integration tests for StatsService."""
+
+from datetime import datetime
+
+import pytest
+from sqlalchemy import text
+
+from models.user import User
+from models.geo import CountryRegion, StateRegion
+from services.stats_service import StatsService
+from tests.fixtures.test_data import SAN_FRANCISCO, LOS_ANGELES, TOKYO
+
+
+@pytest.mark.integration
+class TestStatsServiceCountries:
+    """Test StatsService.get_countries() method."""
+
+    def test_user_with_no_visits_returns_empty(
+        self, db_session, test_user: User
+    ):
+        """Test that user with no visits returns zero total and empty list."""
+        service = StatsService(db_session, test_user.id)
+        result = service.get_countries()
+
+        assert result["total_countries_visited"] == 0
+        assert result["countries"] == []
+
+    def test_user_with_visits_returns_country_stats(
+        self,
+        db_session,
+        test_user: User,
+        test_country_usa: CountryRegion,
+        test_state_california: StateRegion,
+    ):
+        """Test that user with visits returns country with coverage."""
+        # Set up cell count for coverage calculation
+        db_session.execute(text("""
+            UPDATE regions_country
+            SET land_cells_total_resolution8 = 1000
+            WHERE id = :country_id
+        """), {"country_id": test_country_usa.id})
+
+        # Create a cell visit
+        db_session.execute(text("""
+            INSERT INTO h3_cells (h3_index, res, country_id, state_id, centroid, visit_count)
+            VALUES (:h3_index, 8, :country_id, :state_id,
+                    ST_SetSRID(ST_MakePoint(:lon, :lat), 4326), 1)
+        """), {
+            "h3_index": SAN_FRANCISCO["h3_res8"],
+            "country_id": test_country_usa.id,
+            "state_id": test_state_california.id,
+            "lon": SAN_FRANCISCO["longitude"],
+            "lat": SAN_FRANCISCO["latitude"],
+        })
+
+        db_session.execute(text("""
+            INSERT INTO user_cell_visits (user_id, h3_index, res, first_visited_at, last_visited_at, visit_count)
+            VALUES (:user_id, :h3_index, 8, :first_visited, :last_visited, 1)
+        """), {
+            "user_id": test_user.id,
+            "h3_index": SAN_FRANCISCO["h3_res8"],
+            "first_visited": datetime(2024, 3, 15, 10, 30),
+            "last_visited": datetime(2024, 3, 15, 10, 30),
+        })
+        db_session.commit()
+
+        service = StatsService(db_session, test_user.id)
+        result = service.get_countries()
+
+        assert result["total_countries_visited"] == 1
+        assert len(result["countries"]) == 1
+
+        country = result["countries"][0]
+        assert country["code"] == "US"
+        assert country["name"] == "United States"
+        assert country["coverage_pct"] == 0.001  # 1/1000
+        assert country["first_visited_at"] == datetime(2024, 3, 15, 10, 30)
+
+    def test_only_counts_user_cells(
+        self,
+        db_session,
+        test_user: User,
+        test_user2: User,
+        test_country_usa: CountryRegion,
+        test_state_california: StateRegion,
+    ):
+        """Test that only the requesting user's cells are counted."""
+        db_session.execute(text("""
+            UPDATE regions_country SET land_cells_total_resolution8 = 1000 WHERE id = :id
+        """), {"id": test_country_usa.id})
+
+        # User 1 has SF cell
+        db_session.execute(text("""
+            INSERT INTO h3_cells (h3_index, res, country_id, state_id, centroid, visit_count)
+            VALUES (:h3_index, 8, :country_id, :state_id,
+                    ST_SetSRID(ST_MakePoint(:lon, :lat), 4326), 1)
+        """), {
+            "h3_index": SAN_FRANCISCO["h3_res8"],
+            "country_id": test_country_usa.id,
+            "state_id": test_state_california.id,
+            "lon": SAN_FRANCISCO["longitude"],
+            "lat": SAN_FRANCISCO["latitude"],
+        })
+        db_session.execute(text("""
+            INSERT INTO user_cell_visits (user_id, h3_index, res, first_visited_at, last_visited_at, visit_count)
+            VALUES (:user_id, :h3_index, 8, NOW(), NOW(), 1)
+        """), {"user_id": test_user.id, "h3_index": SAN_FRANCISCO["h3_res8"]})
+
+        # User 2 has LA cell
+        db_session.execute(text("""
+            INSERT INTO h3_cells (h3_index, res, country_id, state_id, centroid, visit_count)
+            VALUES (:h3_index, 8, :country_id, :state_id,
+                    ST_SetSRID(ST_MakePoint(:lon, :lat), 4326), 1)
+        """), {
+            "h3_index": LOS_ANGELES["h3_res8"],
+            "country_id": test_country_usa.id,
+            "state_id": test_state_california.id,
+            "lon": LOS_ANGELES["longitude"],
+            "lat": LOS_ANGELES["latitude"],
+        })
+        db_session.execute(text("""
+            INSERT INTO user_cell_visits (user_id, h3_index, res, first_visited_at, last_visited_at, visit_count)
+            VALUES (:user_id, :h3_index, 8, NOW(), NOW(), 1)
+        """), {"user_id": test_user2.id, "h3_index": LOS_ANGELES["h3_res8"]})
+        db_session.commit()
+
+        # User 1 should only see 1 cell (0.1% coverage)
+        service = StatsService(db_session, test_user.id)
+        result = service.get_countries()
+        assert result["countries"][0]["coverage_pct"] == 0.001  # 1/1000
