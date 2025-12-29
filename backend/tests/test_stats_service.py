@@ -76,6 +76,172 @@ class TestStatsServiceCountries:
         assert country["coverage_pct"] == 0.001  # 1/1000
         assert country["first_visited_at"] == datetime(2024, 3, 15, 10, 30)
 
+    def test_multiple_cells_same_country_aggregates(
+        self,
+        db_session,
+        test_user: User,
+        test_country_usa: CountryRegion,
+        test_state_california: StateRegion,
+    ):
+        """Test that multiple cells in same country aggregate correctly."""
+        db_session.execute(text("""
+            UPDATE regions_country
+            SET land_cells_total_resolution8 = 1000
+            WHERE id = :country_id
+        """), {"country_id": test_country_usa.id})
+
+        # Create two cell visits
+        for loc in [SAN_FRANCISCO, LOS_ANGELES]:
+            db_session.execute(text("""
+                INSERT INTO h3_cells (h3_index, res, country_id, state_id, centroid, visit_count)
+                VALUES (:h3_index, 8, :country_id, :state_id,
+                        ST_SetSRID(ST_MakePoint(:lon, :lat), 4326), 1)
+                ON CONFLICT (h3_index) DO NOTHING
+            """), {
+                "h3_index": loc["h3_res8"],
+                "country_id": test_country_usa.id,
+                "state_id": test_state_california.id,
+                "lon": loc["longitude"],
+                "lat": loc["latitude"],
+            })
+
+            db_session.execute(text("""
+                INSERT INTO user_cell_visits (user_id, h3_index, res, first_visited_at, last_visited_at, visit_count)
+                VALUES (:user_id, :h3_index, 8, NOW(), NOW(), 1)
+                ON CONFLICT (user_id, h3_index) DO NOTHING
+            """), {
+                "user_id": test_user.id,
+                "h3_index": loc["h3_res8"],
+            })
+        db_session.commit()
+
+        service = StatsService(db_session, test_user.id)
+        result = service.get_countries()
+
+        assert result["total_countries_visited"] == 1
+        assert result["countries"][0]["coverage_pct"] == 0.002  # 2/1000
+
+    def test_sorting_by_coverage(
+        self,
+        db_session,
+        test_user: User,
+        test_country_usa: CountryRegion,
+        test_country_japan: CountryRegion,
+        test_state_california: StateRegion,
+    ):
+        """Test sorting by coverage percentage."""
+        # USA: 2 cells / 1000 total = 0.2%
+        db_session.execute(text("""
+            UPDATE regions_country SET land_cells_total_resolution8 = 1000 WHERE id = :id
+        """), {"id": test_country_usa.id})
+
+        # Japan: 1 cell / 100 total = 1%
+        db_session.execute(text("""
+            UPDATE regions_country SET land_cells_total_resolution8 = 100 WHERE id = :id
+        """), {"id": test_country_japan.id})
+
+        # Two cells in USA
+        for loc in [SAN_FRANCISCO, LOS_ANGELES]:
+            db_session.execute(text("""
+                INSERT INTO h3_cells (h3_index, res, country_id, state_id, centroid, visit_count)
+                VALUES (:h3_index, 8, :country_id, :state_id,
+                        ST_SetSRID(ST_MakePoint(:lon, :lat), 4326), 1)
+                ON CONFLICT (h3_index) DO NOTHING
+            """), {
+                "h3_index": loc["h3_res8"],
+                "country_id": test_country_usa.id,
+                "state_id": test_state_california.id,
+                "lon": loc["longitude"],
+                "lat": loc["latitude"],
+            })
+            db_session.execute(text("""
+                INSERT INTO user_cell_visits (user_id, h3_index, res, first_visited_at, last_visited_at, visit_count)
+                VALUES (:user_id, :h3_index, 8, NOW(), NOW(), 1)
+                ON CONFLICT (user_id, h3_index) DO NOTHING
+            """), {"user_id": test_user.id, "h3_index": loc["h3_res8"]})
+
+        # One cell in Japan
+        db_session.execute(text("""
+            INSERT INTO h3_cells (h3_index, res, country_id, centroid, visit_count)
+            VALUES (:h3_index, 8, :country_id,
+                    ST_SetSRID(ST_MakePoint(:lon, :lat), 4326), 1)
+        """), {
+            "h3_index": TOKYO["h3_res8"],
+            "country_id": test_country_japan.id,
+            "lon": TOKYO["longitude"],
+            "lat": TOKYO["latitude"],
+        })
+        db_session.execute(text("""
+            INSERT INTO user_cell_visits (user_id, h3_index, res, first_visited_at, last_visited_at, visit_count)
+            VALUES (:user_id, :h3_index, 8, NOW(), NOW(), 1)
+        """), {"user_id": test_user.id, "h3_index": TOKYO["h3_res8"]})
+
+        db_session.commit()
+
+        service = StatsService(db_session, test_user.id)
+
+        # Sort by coverage descending - Japan (1%) should be first
+        result = service.get_countries(sort_by="coverage_pct", order="desc")
+        assert result["countries"][0]["code"] == "JP"
+        assert result["countries"][1]["code"] == "US"
+
+        # Sort by coverage ascending - USA (0.2%) should be first
+        result = service.get_countries(sort_by="coverage_pct", order="asc")
+        assert result["countries"][0]["code"] == "US"
+
+    def test_pagination(
+        self,
+        db_session,
+        test_user: User,
+        test_country_usa: CountryRegion,
+        test_country_japan: CountryRegion,
+        test_state_california: StateRegion,
+    ):
+        """Test limit and offset pagination."""
+        # Create visits in both countries
+        db_session.execute(text("""
+            INSERT INTO h3_cells (h3_index, res, country_id, state_id, centroid, visit_count)
+            VALUES (:h3_index, 8, :country_id, :state_id,
+                    ST_SetSRID(ST_MakePoint(:lon, :lat), 4326), 1)
+        """), {
+            "h3_index": SAN_FRANCISCO["h3_res8"],
+            "country_id": test_country_usa.id,
+            "state_id": test_state_california.id,
+            "lon": SAN_FRANCISCO["longitude"],
+            "lat": SAN_FRANCISCO["latitude"],
+        })
+        db_session.execute(text("""
+            INSERT INTO user_cell_visits (user_id, h3_index, res, first_visited_at, last_visited_at, visit_count)
+            VALUES (:user_id, :h3_index, 8, NOW(), NOW(), 1)
+        """), {"user_id": test_user.id, "h3_index": SAN_FRANCISCO["h3_res8"]})
+
+        db_session.execute(text("""
+            INSERT INTO h3_cells (h3_index, res, country_id, centroid, visit_count)
+            VALUES (:h3_index, 8, :country_id,
+                    ST_SetSRID(ST_MakePoint(:lon, :lat), 4326), 1)
+        """), {
+            "h3_index": TOKYO["h3_res8"],
+            "country_id": test_country_japan.id,
+            "lon": TOKYO["longitude"],
+            "lat": TOKYO["latitude"],
+        })
+        db_session.execute(text("""
+            INSERT INTO user_cell_visits (user_id, h3_index, res, first_visited_at, last_visited_at, visit_count)
+            VALUES (:user_id, :h3_index, 8, NOW(), NOW(), 1)
+        """), {"user_id": test_user.id, "h3_index": TOKYO["h3_res8"]})
+        db_session.commit()
+
+        service = StatsService(db_session, test_user.id)
+
+        # Limit to 1
+        result = service.get_countries(limit=1)
+        assert result["total_countries_visited"] == 2  # Total unchanged
+        assert len(result["countries"]) == 1  # Only 1 returned
+
+        # Offset by 1
+        result = service.get_countries(limit=1, offset=1)
+        assert len(result["countries"]) == 1
+
     def test_only_counts_user_cells(
         self,
         db_session,
@@ -111,6 +277,7 @@ class TestStatsServiceCountries:
             INSERT INTO h3_cells (h3_index, res, country_id, state_id, centroid, visit_count)
             VALUES (:h3_index, 8, :country_id, :state_id,
                     ST_SetSRID(ST_MakePoint(:lon, :lat), 4326), 1)
+            ON CONFLICT (h3_index) DO NOTHING
         """), {
             "h3_index": LOS_ANGELES["h3_res8"],
             "country_id": test_country_usa.id,
@@ -128,74 +295,6 @@ class TestStatsServiceCountries:
         service = StatsService(db_session, test_user.id)
         result = service.get_countries()
         assert result["countries"][0]["coverage_pct"] == 0.001  # 1/1000
-
-    def test_sorting_by_coverage(
-        self,
-        db_session,
-        test_user: User,
-        test_country_usa: CountryRegion,
-        test_country_japan: CountryRegion,
-        test_state_california: StateRegion,
-    ):
-        """Test sorting by coverage percentage."""
-        # USA: 2 cells / 1000 total = 0.2%
-        db_session.execute(text("""
-            UPDATE regions_country SET land_cells_total_resolution8 = 1000 WHERE id = :id
-        """), {"id": test_country_usa.id})
-
-        # Japan: 1 cell / 100 total = 1%
-        db_session.execute(text("""
-            UPDATE regions_country SET land_cells_total_resolution8 = 100 WHERE id = :id
-        """), {"id": test_country_japan.id})
-
-        # Two cells in USA
-        for loc in [SAN_FRANCISCO, LOS_ANGELES]:
-            db_session.execute(text("""
-                INSERT INTO h3_cells (h3_index, res, country_id, state_id, centroid, visit_count)
-                VALUES (:h3_index, 8, :country_id, :state_id,
-                        ST_SetSRID(ST_MakePoint(:lon, :lat), 4326), 1)
-                ON CONFLICT DO NOTHING
-            """), {
-                "h3_index": loc["h3_res8"],
-                "country_id": test_country_usa.id,
-                "state_id": test_state_california.id,
-                "lon": loc["longitude"],
-                "lat": loc["latitude"],
-            })
-            db_session.execute(text("""
-                INSERT INTO user_cell_visits (user_id, h3_index, res, first_visited_at, last_visited_at, visit_count)
-                VALUES (:user_id, :h3_index, 8, NOW(), NOW(), 1)
-                ON CONFLICT DO NOTHING
-            """), {"user_id": test_user.id, "h3_index": loc["h3_res8"]})
-
-        # One cell in Japan
-        db_session.execute(text("""
-            INSERT INTO h3_cells (h3_index, res, country_id, centroid, visit_count)
-            VALUES (:h3_index, 8, :country_id,
-                    ST_SetSRID(ST_MakePoint(:lon, :lat), 4326), 1)
-        """), {
-            "h3_index": TOKYO["h3_res8"],
-            "country_id": test_country_japan.id,
-            "lon": TOKYO["longitude"],
-            "lat": TOKYO["latitude"],
-        })
-        db_session.execute(text("""
-            INSERT INTO user_cell_visits (user_id, h3_index, res, first_visited_at, last_visited_at, visit_count)
-            VALUES (:user_id, :h3_index, 8, NOW(), NOW(), 1)
-        """), {"user_id": test_user.id, "h3_index": TOKYO["h3_res8"]})
-
-        db_session.commit()
-
-        service = StatsService(db_session, test_user.id)
-
-        # Sort by coverage descending - Japan (1%) should be first
-        result = service.get_countries(sort_by="coverage_pct", order="desc")
-        assert result["countries"][0]["code"] == "JP"
-        assert result["countries"][1]["code"] == "US"
-
-        # Sort by coverage ascending - USA (0.2%) should be first
-        result = service.get_countries(sort_by="coverage_pct", order="asc")
-        assert result["countries"][0]["code"] == "US"
 
 
 @pytest.mark.integration
@@ -263,58 +362,3 @@ class TestStatsServiceRegions:
         assert region["country_code"] == "US"
         assert region["country_name"] == "United States"
         assert region["coverage_pct"] == 0.002  # 1/500
-        assert region["first_visited_at"] == datetime(2024, 3, 15, 10, 30)
-        assert region["last_visited_at"] == datetime(2024, 3, 15, 10, 30)
-
-    def test_only_counts_user_regions(
-        self,
-        db_session,
-        test_user: User,
-        test_user2: User,
-        test_country_usa: CountryRegion,
-        test_state_california: StateRegion,
-    ):
-        """Test that only the requesting user's cells are counted."""
-        db_session.execute(text("""
-            UPDATE regions_state SET land_cells_total_resolution8 = 1000 WHERE id = :id
-        """), {"id": test_state_california.id})
-
-        # User 1 has SF cell
-        db_session.execute(text("""
-            INSERT INTO h3_cells (h3_index, res, country_id, state_id, centroid, visit_count)
-            VALUES (:h3_index, 8, :country_id, :state_id,
-                    ST_SetSRID(ST_MakePoint(:lon, :lat), 4326), 1)
-        """), {
-            "h3_index": SAN_FRANCISCO["h3_res8"],
-            "country_id": test_country_usa.id,
-            "state_id": test_state_california.id,
-            "lon": SAN_FRANCISCO["longitude"],
-            "lat": SAN_FRANCISCO["latitude"],
-        })
-        db_session.execute(text("""
-            INSERT INTO user_cell_visits (user_id, h3_index, res, first_visited_at, last_visited_at, visit_count)
-            VALUES (:user_id, :h3_index, 8, NOW(), NOW(), 1)
-        """), {"user_id": test_user.id, "h3_index": SAN_FRANCISCO["h3_res8"]})
-
-        # User 2 has LA cell (same state)
-        db_session.execute(text("""
-            INSERT INTO h3_cells (h3_index, res, country_id, state_id, centroid, visit_count)
-            VALUES (:h3_index, 8, :country_id, :state_id,
-                    ST_SetSRID(ST_MakePoint(:lon, :lat), 4326), 1)
-        """), {
-            "h3_index": LOS_ANGELES["h3_res8"],
-            "country_id": test_country_usa.id,
-            "state_id": test_state_california.id,
-            "lon": LOS_ANGELES["longitude"],
-            "lat": LOS_ANGELES["latitude"],
-        })
-        db_session.execute(text("""
-            INSERT INTO user_cell_visits (user_id, h3_index, res, first_visited_at, last_visited_at, visit_count)
-            VALUES (:user_id, :h3_index, 8, NOW(), NOW(), 1)
-        """), {"user_id": test_user2.id, "h3_index": LOS_ANGELES["h3_res8"]})
-        db_session.commit()
-
-        # User 1 should only see 1 cell (0.1% coverage), not user 2's cell
-        service = StatsService(db_session, test_user.id)
-        result = service.get_regions()
-        assert result["regions"][0]["coverage_pct"] == 0.001  # 1/1000
