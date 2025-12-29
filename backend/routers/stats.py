@@ -6,7 +6,7 @@ from typing import Literal
 
 from database import get_db
 from models.user import User
-from schemas.stats import CountriesStatsResponse, RegionsStatsResponse
+from schemas.stats import CountriesStatsResponse, RegionsStatsResponse, OverviewResponse
 from services.auth import get_current_user
 from services.stats_service import StatsService
 
@@ -98,3 +98,21 @@ def get_regions_stats(
         total_regions_visited=result["total_regions_visited"],
         regions=result["regions"],
     )
+
+
+@router.get("/overview", response_model=OverviewResponse)
+def get_overview(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get profile overview with user stats and recent visits.
+
+    Returns comprehensive profile data optimized for the Profile page:
+    - User information (username, account age)
+    - Aggregate statistics (countries, regions, cells at res6/res8)
+    - Recent travel activity (last 3 countries and regions visited)
+
+    This endpoint uses optimized queries for fast response times.
+    """
+    service = StatsService(db, current_user.id)
+    return service.get_overview()
