@@ -349,3 +349,105 @@ class TestStatsOverviewEndpoint:
         # Recent lists should have at most 3 items each
         assert len(data["recent_countries"]) <= 3
         assert len(data["recent_regions"]) <= 3
+
+    def test_overview_recent_lists_sorted_by_last_visit(
+        self, client, test_user, db_session, test_country_usa, test_state_california
+    ):
+        """Recent countries/regions should be ordered by most recent visit."""
+        from models.visits import UserCellVisit
+        from datetime import datetime, timedelta
+
+        now = datetime.utcnow()
+
+        # First, create h3_cells that we'll visit
+        # These cells will be in the same country/state to test sorting
+        h3_cells = [
+            {
+                "h3_index": "882830810ffffff",
+                "last_visited": now - timedelta(days=1),  # Most recent
+            },
+            {
+                "h3_index": "882830820ffffff",
+                "last_visited": now - timedelta(days=5),  # Middle
+            },
+            {
+                "h3_index": "882830830ffffff",
+                "last_visited": now - timedelta(days=10),  # Oldest
+            },
+        ]
+
+        # Create h3_cells in database
+        for cell in h3_cells:
+            db_session.execute(text("""
+                INSERT INTO h3_cells (h3_index, res, country_id, state_id, centroid, visit_count)
+                VALUES (:h3_index, 8, :country_id, :state_id,
+                        ST_SetSRID(ST_MakePoint(:lon, :lat), 4326), 0)
+            """), {
+                "h3_index": cell["h3_index"],
+                "country_id": test_country_usa.id,
+                "state_id": test_state_california.id,
+                "lon": -122.4,
+                "lat": 37.8,
+            })
+
+        # Create visits with different timestamps
+        visits = [
+            UserCellVisit(
+                user_id=test_user.id,
+                h3_index="882830810ffffff",
+                res=8,
+                first_visited_at=now - timedelta(days=1),
+                last_visited_at=now - timedelta(days=1),  # Most recent
+                visit_count=1,
+            ),
+            UserCellVisit(
+                user_id=test_user.id,
+                h3_index="882830820ffffff",
+                res=8,
+                first_visited_at=now - timedelta(days=5),
+                last_visited_at=now - timedelta(days=5),  # Middle
+                visit_count=1,
+            ),
+            UserCellVisit(
+                user_id=test_user.id,
+                h3_index="882830830ffffff",
+                res=8,
+                first_visited_at=now - timedelta(days=10),
+                last_visited_at=now - timedelta(days=10),  # Oldest
+                visit_count=1,
+            ),
+        ]
+
+        for visit in visits:
+            db_session.add(visit)
+        db_session.commit()
+
+        token = create_jwt_token(test_user.id, test_user.username)
+        response = client.get(
+            "/api/v1/stats/overview",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+
+        # Verify descending order for countries (if multiple countries)
+        if len(data["recent_countries"]) > 1:
+            for i in range(len(data["recent_countries"]) - 1):
+                current = datetime.fromisoformat(
+                    data["recent_countries"][i]["visited_at"].replace("Z", "+00:00")
+                )
+                next_item = datetime.fromisoformat(
+                    data["recent_countries"][i + 1]["visited_at"].replace("Z", "+00:00")
+                )
+                assert current >= next_item, "Countries not sorted by visited_at DESC"
+
+        # Verify descending order for regions (if multiple regions)
+        if len(data["recent_regions"]) > 1:
+            for i in range(len(data["recent_regions"]) - 1):
+                current = datetime.fromisoformat(
+                    data["recent_regions"][i]["visited_at"].replace("Z", "+00:00")
+                )
+                next_item = datetime.fromisoformat(
+                    data["recent_regions"][i + 1]["visited_at"].replace("Z", "+00:00")
+                )
+                assert current >= next_item, "Regions not sorted by visited_at DESC"
