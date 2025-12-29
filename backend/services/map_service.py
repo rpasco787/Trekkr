@@ -1,5 +1,7 @@
 """Map service for retrieving user's visited areas."""
 
+from typing import Optional
+
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -57,3 +59,53 @@ class MapService:
         ]
 
         return {"countries": countries, "regions": regions}
+
+    def get_cells_in_viewport(
+        self,
+        min_lng: float,
+        min_lat: float,
+        max_lng: float,
+        max_lat: float,
+        limit: Optional[int] = None,
+    ) -> dict:
+        """Get H3 cell indexes within the bounding box.
+
+        Args:
+            min_lng: Western longitude bound
+            min_lat: Southern latitude bound
+            max_lng: Eastern longitude bound
+            max_lat: Northern latitude bound
+            limit: Optional maximum number of cells to return (for future use)
+
+        Returns:
+            dict with 'res6' and 'res8' lists of H3 index strings
+        """
+        query = text("""
+            SELECT hc.h3_index, hc.res
+            FROM user_cell_visits ucv
+            JOIN h3_cells hc ON ucv.h3_index = hc.h3_index
+            WHERE ucv.user_id = :user_id
+              AND hc.res IN (6, 8)
+              AND ST_Intersects(
+                  hc.centroid::geometry,
+                  ST_MakeEnvelope(:min_lng, :min_lat, :max_lng, :max_lat, 4326)
+              )
+            ORDER BY hc.h3_index
+        """)
+
+        result = self.db.execute(query, {
+            "user_id": self.user_id,
+            "min_lng": min_lng,
+            "min_lat": min_lat,
+            "max_lng": max_lng,
+            "max_lat": max_lat,
+        }).fetchall()
+
+        res6, res8 = [], []
+        for row in result:
+            if row.res == 6:
+                res6.append(row.h3_index)
+            else:
+                res8.append(row.h3_index)
+
+        return {"res6": res6, "res8": res8}
