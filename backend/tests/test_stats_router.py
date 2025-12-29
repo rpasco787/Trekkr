@@ -359,36 +359,101 @@ class TestStatsOverviewEndpoint:
 
         now = datetime.utcnow()
 
-        # First, create h3_cells that we'll visit
-        # These cells will be in the same country/state to test sorting
-        h3_cells = [
-            {
-                "h3_index": "882830810ffffff",
-                "last_visited": now - timedelta(days=1),  # Most recent
-            },
-            {
-                "h3_index": "882830820ffffff",
-                "last_visited": now - timedelta(days=5),  # Middle
-            },
-            {
-                "h3_index": "882830830ffffff",
-                "last_visited": now - timedelta(days=10),  # Oldest
-            },
-        ]
+        # Create Mexico country and state
+        country_mexico = db_session.execute(text("""
+            INSERT INTO regions_country (name, iso2, iso3, geom, created_at, updated_at)
+            VALUES (
+                'Mexico',
+                'MX',
+                'MEX',
+                ST_GeomFromText('POLYGON((-115 15, -115 30, -90 30, -90 15, -115 15))', 4326),
+                CURRENT_TIMESTAMP,
+                CURRENT_TIMESTAMP
+            )
+            RETURNING id
+        """)).fetchone()
 
-        # Create h3_cells in database
-        for cell in h3_cells:
-            db_session.execute(text("""
-                INSERT INTO h3_cells (h3_index, res, country_id, state_id, centroid, visit_count)
-                VALUES (:h3_index, 8, :country_id, :state_id,
-                        ST_SetSRID(ST_MakePoint(:lon, :lat), 4326), 0)
-            """), {
-                "h3_index": cell["h3_index"],
-                "country_id": test_country_usa.id,
-                "state_id": test_state_california.id,
-                "lon": -122.4,
-                "lat": 37.8,
-            })
+        state_mexico = db_session.execute(text("""
+            INSERT INTO regions_state (name, code, country_id, geom, created_at, updated_at)
+            VALUES (
+                'Jalisco',
+                'JAL',
+                :country_id,
+                ST_GeomFromText('POLYGON((-105 19, -105 21, -103 21, -103 19, -105 19))', 4326),
+                CURRENT_TIMESTAMP,
+                CURRENT_TIMESTAMP
+            )
+            RETURNING id
+        """), {"country_id": country_mexico.id}).fetchone()
+
+        # Create Canada country and state
+        country_canada = db_session.execute(text("""
+            INSERT INTO regions_country (name, iso2, iso3, geom, created_at, updated_at)
+            VALUES (
+                'Canada',
+                'CA',
+                'CAN',
+                ST_GeomFromText('POLYGON((-140 45, -140 70, -60 70, -60 45, -140 45))', 4326),
+                CURRENT_TIMESTAMP,
+                CURRENT_TIMESTAMP
+            )
+            RETURNING id
+        """)).fetchone()
+
+        state_canada = db_session.execute(text("""
+            INSERT INTO regions_state (name, code, country_id, geom, created_at, updated_at)
+            VALUES (
+                'Ontario',
+                'ON',
+                :country_id,
+                ST_GeomFromText('POLYGON((-85 42, -85 48, -75 48, -75 42, -85 42))', 4326),
+                CURRENT_TIMESTAMP,
+                CURRENT_TIMESTAMP
+            )
+            RETURNING id
+        """), {"country_id": country_canada.id}).fetchone()
+
+        db_session.commit()
+
+        # Create h3_cells in different countries with different timestamps
+        # USA - 10 days ago (oldest)
+        db_session.execute(text("""
+            INSERT INTO h3_cells (h3_index, res, country_id, state_id, centroid, visit_count)
+            VALUES (:h3_index, 8, :country_id, :state_id,
+                    ST_SetSRID(ST_MakePoint(:lon, :lat), 4326), 0)
+        """), {
+            "h3_index": "882830810ffffff",
+            "country_id": test_country_usa.id,
+            "state_id": test_state_california.id,
+            "lon": -122.4,
+            "lat": 37.8,
+        })
+
+        # Mexico - 5 days ago (middle)
+        db_session.execute(text("""
+            INSERT INTO h3_cells (h3_index, res, country_id, state_id, centroid, visit_count)
+            VALUES (:h3_index, 8, :country_id, :state_id,
+                    ST_SetSRID(ST_MakePoint(:lon, :lat), 4326), 0)
+        """), {
+            "h3_index": "882830820ffffff",
+            "country_id": country_mexico.id,
+            "state_id": state_mexico.id,
+            "lon": -103.5,
+            "lat": 20.5,
+        })
+
+        # Canada - 1 day ago (most recent)
+        db_session.execute(text("""
+            INSERT INTO h3_cells (h3_index, res, country_id, state_id, centroid, visit_count)
+            VALUES (:h3_index, 8, :country_id, :state_id,
+                    ST_SetSRID(ST_MakePoint(:lon, :lat), 4326), 0)
+        """), {
+            "h3_index": "882830830ffffff",
+            "country_id": country_canada.id,
+            "state_id": state_canada.id,
+            "lon": -79.4,
+            "lat": 43.7,
+        })
 
         # Create visits with different timestamps
         visits = [
@@ -396,8 +461,8 @@ class TestStatsOverviewEndpoint:
                 user_id=test_user.id,
                 h3_index="882830810ffffff",
                 res=8,
-                first_visited_at=now - timedelta(days=1),
-                last_visited_at=now - timedelta(days=1),  # Most recent
+                first_visited_at=now - timedelta(days=10),
+                last_visited_at=now - timedelta(days=10),  # USA - Oldest
                 visit_count=1,
             ),
             UserCellVisit(
@@ -405,15 +470,15 @@ class TestStatsOverviewEndpoint:
                 h3_index="882830820ffffff",
                 res=8,
                 first_visited_at=now - timedelta(days=5),
-                last_visited_at=now - timedelta(days=5),  # Middle
+                last_visited_at=now - timedelta(days=5),  # Mexico - Middle
                 visit_count=1,
             ),
             UserCellVisit(
                 user_id=test_user.id,
                 h3_index="882830830ffffff",
                 res=8,
-                first_visited_at=now - timedelta(days=10),
-                last_visited_at=now - timedelta(days=10),  # Oldest
+                first_visited_at=now - timedelta(days=1),
+                last_visited_at=now - timedelta(days=1),  # Canada - Most recent
                 visit_count=1,
             ),
         ]
@@ -430,24 +495,37 @@ class TestStatsOverviewEndpoint:
         assert response.status_code == 200
         data = response.json()
 
-        # Verify descending order for countries (if multiple countries)
-        if len(data["recent_countries"]) > 1:
-            for i in range(len(data["recent_countries"]) - 1):
-                current = datetime.fromisoformat(
-                    data["recent_countries"][i]["visited_at"].replace("Z", "+00:00")
-                )
-                next_item = datetime.fromisoformat(
-                    data["recent_countries"][i + 1]["visited_at"].replace("Z", "+00:00")
-                )
-                assert current >= next_item, "Countries not sorted by visited_at DESC"
+        # CRITICAL: Ensure we have multiple countries/regions to test sorting
+        assert len(data["recent_countries"]) >= 2, "Test requires at least 2 countries to verify sorting"
+        assert len(data["recent_regions"]) >= 2, "Test requires at least 2 regions to verify sorting"
 
-        # Verify descending order for regions (if multiple regions)
-        if len(data["recent_regions"]) > 1:
-            for i in range(len(data["recent_regions"]) - 1):
-                current = datetime.fromisoformat(
-                    data["recent_regions"][i]["visited_at"].replace("Z", "+00:00")
-                )
-                next_item = datetime.fromisoformat(
-                    data["recent_regions"][i + 1]["visited_at"].replace("Z", "+00:00")
-                )
-                assert current >= next_item, "Regions not sorted by visited_at DESC"
+        # Verify countries are sorted by most recent visit (DESC)
+        # Should be: Canada (1 day ago), Mexico (5 days ago), USA (10 days ago)
+        assert data["recent_countries"][0]["code"] == "CA", "Most recent country should be Canada"
+        assert data["recent_countries"][1]["code"] == "MX", "Second most recent should be Mexico"
+        assert data["recent_countries"][2]["code"] == "US", "Oldest country should be USA"
+
+        # Verify regions are sorted by most recent visit (DESC)
+        # Should be: Ontario (1 day ago), Jalisco (5 days ago), California (10 days ago)
+        assert data["recent_regions"][0]["code"] == "CA-ON", "Most recent region should be Ontario"
+        assert data["recent_regions"][1]["code"] == "MX-JAL", "Second most recent should be Jalisco"
+        assert data["recent_regions"][2]["code"] == "US-CA", "Oldest region should be California"
+
+        # Verify general descending order for timestamps
+        for i in range(len(data["recent_countries"]) - 1):
+            current = datetime.fromisoformat(
+                data["recent_countries"][i]["visited_at"].replace("Z", "+00:00")
+            )
+            next_item = datetime.fromisoformat(
+                data["recent_countries"][i + 1]["visited_at"].replace("Z", "+00:00")
+            )
+            assert current >= next_item, "Countries not sorted by visited_at DESC"
+
+        for i in range(len(data["recent_regions"]) - 1):
+            current = datetime.fromisoformat(
+                data["recent_regions"][i]["visited_at"].replace("Z", "+00:00")
+            )
+            next_item = datetime.fromisoformat(
+                data["recent_regions"][i + 1]["visited_at"].replace("Z", "+00:00")
+            )
+            assert current >= next_item, "Regions not sorted by visited_at DESC"
