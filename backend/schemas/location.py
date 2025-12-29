@@ -14,7 +14,9 @@ class LocationIngestRequest(BaseModel):
     longitude: float
     h3_res8: str
     timestamp: Optional[datetime] = None
-    device_id: Optional[str] = None
+    device_uuid: Optional[str] = None
+    device_name: Optional[str] = None
+    platform: Optional[str] = None
 
     @field_validator("latitude")
     @classmethod

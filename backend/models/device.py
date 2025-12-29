@@ -18,6 +18,7 @@ class Device(Base):
         Integer,
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
+        unique=True,  # One device per user
         index=True,
     )
     device_uuid = Column(String(255), unique=True, nullable=True, index=True)

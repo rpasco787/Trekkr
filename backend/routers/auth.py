@@ -3,8 +3,11 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from database import get_db
+from models.device import Device
 from models.user import User
 from schemas.auth import (
+    DeviceResponse,
+    DeviceUpdateRequest,
     MessageResponse,
     TokenRefresh,
     TokenResponse,
@@ -155,4 +158,45 @@ def get_me(current_user: User = Depends(get_current_user)):
     Raises: 401 if not authenticated or token invalid
     """
     return current_user
+
+
+@router.patch("/device", response_model=DeviceResponse)
+def update_device(
+    device_data: DeviceUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Update the current user's device metadata.
+
+    Auto-creates device if user doesn't have one yet (single device per user).
+    Requires: Authorization header with Bearer token
+    Body: device_name, platform, app_version (all optional)
+    Returns: updated device information
+    """
+    # Get or create user's device
+    device = db.query(Device).filter(Device.user_id == current_user.id).first()
+
+    if not device:
+        # Create first device with provided metadata
+        device = Device(
+            user_id=current_user.id,
+            device_name=device_data.device_name or "My Phone",
+            platform=device_data.platform or "unknown",
+            app_version=device_data.app_version,
+        )
+        db.add(device)
+    else:
+        # Update existing device metadata
+        if device_data.device_name is not None:
+            device.device_name = device_data.device_name
+        if device_data.platform is not None:
+            device.platform = device_data.platform
+        if device_data.app_version is not None:
+            device.app_version = device_data.app_version
+
+    db.commit()
+    db.refresh(device)
+
+    return device
 

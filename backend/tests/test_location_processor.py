@@ -101,13 +101,17 @@ class TestProcessLocation:
             mock_state,
         ]
 
-        # Execute
-        result = processor.process_location(
-            latitude=SAN_FRANCISCO["latitude"],
-            longitude=SAN_FRANCISCO["longitude"],
-            h3_res8=SAN_FRANCISCO["h3_res8"],
-            device_id=1,
-        )
+        # Mock _ensure_device to return device_id
+        with patch.object(processor, '_ensure_device', return_value=1):
+            # Execute
+            result = processor.process_location(
+                latitude=SAN_FRANCISCO["latitude"],
+                longitude=SAN_FRANCISCO["longitude"],
+                h3_res8=SAN_FRANCISCO["h3_res8"],
+                device_uuid="test-uuid",
+                device_name="Test Phone",
+                platform="ios",
+            )
 
         # Verify commit was called
         mock_db_session.commit.assert_called_once()
@@ -199,7 +203,7 @@ class TestProcessLocation:
     def test_process_location_without_device_id(
         self, processor: LocationProcessor, mock_db_session: MagicMock
     ):
-        """Test processing location without device_id."""
+        """Test processing location without device metadata."""
         mock_db_session.execute.side_effect = [
             # 1. Reverse geocode
             Mock(fetchone=Mock(return_value=Mock(country_id=None, state_id=None))),
@@ -217,12 +221,13 @@ class TestProcessLocation:
             ))),
         ]
 
-        result = processor.process_location(
-            latitude=SAN_FRANCISCO["latitude"],
-            longitude=SAN_FRANCISCO["longitude"],
-            h3_res8=SAN_FRANCISCO["h3_res8"],
-            device_id=None,
-        )
+        # Mock _ensure_device to return device_id
+        with patch.object(processor, '_ensure_device', return_value=None):
+            result = processor.process_location(
+                latitude=SAN_FRANCISCO["latitude"],
+                longitude=SAN_FRANCISCO["longitude"],
+                h3_res8=SAN_FRANCISCO["h3_res8"],
+            )
 
         assert result is not None
 

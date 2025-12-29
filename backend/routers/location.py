@@ -8,7 +8,6 @@ import h3
 
 from database import get_db
 from models.user import User
-from models.device import Device
 from schemas.location import LocationIngestRequest, LocationIngestResponse
 from services.auth import get_current_user
 from services.location_processor import LocationProcessor
@@ -66,16 +65,6 @@ def ingest_location(
                 },
             )
 
-    # Resolve device_id if provided
-    device_id = None
-    if payload.device_id:
-        device = db.query(Device).filter(
-            Device.device_uuid == payload.device_id,
-            Device.user_id == current_user.id,
-        ).first()
-        if device:
-            device_id = device.id
-
     # Process the location
     processor = LocationProcessor(db, current_user.id)
 
@@ -84,7 +73,9 @@ def ingest_location(
             latitude=payload.latitude,
             longitude=payload.longitude,
             h3_res8=payload.h3_res8,
-            device_id=device_id,
+            device_uuid=payload.device_uuid,
+            device_name=payload.device_name,
+            platform=payload.platform,
             timestamp=payload.timestamp,
         )
         return result

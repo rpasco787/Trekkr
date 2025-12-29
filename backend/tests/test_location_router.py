@@ -23,6 +23,7 @@ from tests.fixtures.test_data import (
     LOS_ANGELES,
     NEW_YORK,
 )
+from sqlalchemy.orm import Session
 
 
 # ============================================================================
@@ -691,3 +692,94 @@ class TestDiscoveryFlow:
         # But cells are still discovered
         assert len(data["discoveries"]["new_cells_res6"]) == 1
         assert len(data["discoveries"]["new_cells_res8"]) == 1
+
+
+# ============================================================================
+# Device Auto-Creation Tests
+# ============================================================================
+
+@pytest.mark.integration
+class TestDeviceAutoCreation:
+    """Test automatic device creation during location ingestion."""
+
+    def test_device_auto_creation_on_first_ingestion(
+        self,
+        client: TestClient,
+        db_session: Session,
+        test_user: User,
+        test_country_usa: CountryRegion,
+        test_state_california: StateRegion,
+    ):
+        """Test that a device is auto-created when user ingests first location."""
+        # Verify user has no devices
+        existing_devices = db_session.query(Device).filter(
+            Device.user_id == test_user.id
+        ).all()
+        assert len(existing_devices) == 0
+
+        token = create_jwt_token(test_user.id, test_user.username)
+
+        # Ingest location with device metadata
+        response = client.post(
+            "/api/v1/location/ingest",
+            json={
+                "latitude": SAN_FRANCISCO["latitude"],
+                "longitude": SAN_FRANCISCO["longitude"],
+                "h3_res8": SAN_FRANCISCO["h3_res8"],
+                "device_uuid": "test-device-uuid-123",
+                "device_name": "iPhone 15 Pro",
+                "platform": "ios",
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 200
+
+        # Verify device was auto-created
+        devices = db_session.query(Device).filter(
+            Device.user_id == test_user.id
+        ).all()
+        assert len(devices) == 1
+
+        device = devices[0]
+        assert device.device_uuid == "test-device-uuid-123"
+        assert device.device_name == "iPhone 15 Pro"
+        assert device.platform == "ios"
+        assert device.user_id == test_user.id
+
+    def test_device_metadata_update_on_subsequent_ingestion(
+        self,
+        client: TestClient,
+        db_session: Session,
+        test_user: User,
+        test_device: Device,
+        test_country_usa: CountryRegion,
+        test_state_california: StateRegion,
+    ):
+        """Test that device metadata is updated when user ingests with new metadata."""
+        # Verify device exists with initial metadata
+        assert test_device.device_name == "Test iPhone"
+        assert test_device.platform == "iOS"
+
+        token = create_jwt_token(test_user.id, test_user.username)
+
+        # Ingest location with updated device metadata
+        response = client.post(
+            "/api/v1/location/ingest",
+            json={
+                "latitude": SAN_FRANCISCO["latitude"],
+                "longitude": SAN_FRANCISCO["longitude"],
+                "h3_res8": SAN_FRANCISCO["h3_res8"],
+                "device_uuid": test_device.device_uuid,
+                "device_name": "iPhone 16 Pro Max",  # Updated name
+                "platform": "ios",  # Updated platform (case change)
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 200
+
+        # Refresh device and verify metadata was updated
+        db_session.refresh(test_device)
+        assert test_device.device_name == "iPhone 16 Pro Max"
+        assert test_device.platform == "ios"

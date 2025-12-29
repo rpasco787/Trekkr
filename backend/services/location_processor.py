@@ -7,6 +7,7 @@ import h3
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from models.device import Device
 from models.geo import CountryRegion, H3Cell, StateRegion
 from models.visits import IngestBatch, UserCellVisit
 
@@ -18,12 +19,44 @@ class LocationProcessor:
         self.db = db
         self.user_id = user_id
 
+    def _ensure_device(
+        self,
+        device_uuid: Optional[str] = None,
+        device_name: Optional[str] = None,
+        platform: Optional[str] = None,
+    ) -> int:
+        """Get or create user's single device."""
+        device = self.db.query(Device).filter(Device.user_id == self.user_id).first()
+
+        if not device:
+            # Create first device
+            device = Device(
+                user_id=self.user_id,
+                device_uuid=device_uuid,
+                device_name=device_name or "My Phone",
+                platform=platform or "unknown",
+            )
+            self.db.add(device)
+            self.db.flush()
+        else:
+            # Update metadata if provided
+            if device_uuid and device.device_uuid != device_uuid:
+                device.device_uuid = device_uuid
+            if device_name:
+                device.device_name = device_name
+            if platform:
+                device.platform = platform
+
+        return device.id
+
     def process_location(
         self,
         latitude: float,
         longitude: float,
         h3_res8: str,
-        device_id: Optional[int] = None,
+        device_uuid: Optional[str] = None,
+        device_name: Optional[str] = None,
+        platform: Optional[str] = None,
         timestamp: Optional[datetime] = None,
     ) -> dict:
         """
@@ -32,6 +65,9 @@ class LocationProcessor:
         Returns discovery summary with new vs. revisited entities.
         """
         timestamp = timestamp or datetime.utcnow()
+
+        # Ensure device exists (auto-create if first time)
+        device_id = self._ensure_device(device_uuid, device_name, platform)
 
         # Derive parent res-6 cell from res-8
         h3_res6 = h3.cell_to_parent(h3_res8, 6)

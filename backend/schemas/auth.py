@@ -1,5 +1,6 @@
 import re
 from datetime import datetime
+from typing import Optional
 
 from pydantic import BaseModel, EmailStr, field_validator
 
@@ -58,4 +59,27 @@ class TokenRefresh(BaseModel):
 
 class MessageResponse(BaseModel):
     message: str
+
+
+class DeviceUpdateRequest(BaseModel):
+    """Request schema for updating device metadata."""
+
+    device_name: Optional[str] = None
+    platform: Optional[str] = None  # "ios", "android", "web"
+    app_version: Optional[str] = None
+
+
+class DeviceResponse(BaseModel):
+    """Response schema for device data."""
+
+    id: int
+    device_uuid: Optional[str]
+    device_name: Optional[str]
+    platform: Optional[str]
+    app_version: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
 
