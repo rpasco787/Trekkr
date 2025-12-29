@@ -18,7 +18,7 @@ class StatsQueryParams(BaseModel):
 class CountryStatResponse(BaseModel):
     """Statistics for a single country."""
 
-    code: str  # ISO 3166-1 alpha-3 (e.g., "USA")
+    code: str  # ISO 3166-1 alpha-2 (e.g., "US")
     name: str
     coverage_pct: float
     first_visited_at: datetime
@@ -37,7 +37,7 @@ class RegionStatResponse(BaseModel):
 
     code: str  # ISO 3166-2 (e.g., "US-CA")
     name: str
-    country_code: str  # ISO 3166-1 alpha-3
+    country_code: str  # ISO 3166-1 alpha-2 (e.g., "US")
     country_name: str
     coverage_pct: float
     first_visited_at: datetime
