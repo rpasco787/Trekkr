@@ -534,3 +534,65 @@ class TestStatsOverviewEndpoint:
                 data["recent_regions"][i + 1]["visited_at"].replace("Z", "+00:00")
             )
             assert current >= next_item, "Regions not sorted by visited_at DESC"
+
+    def test_overview_counts_both_resolutions(
+        self, client, test_user, db_session, test_country_usa, test_state_california
+    ):
+        """Should count res6 and res8 cells separately."""
+        from models.visits import UserCellVisit
+
+        # First, create h3_cells for both resolutions
+        # Add res6 cell
+        db_session.execute(text("""
+            INSERT INTO h3_cells (h3_index, res, country_id, state_id, centroid, visit_count)
+            VALUES (:h3_index, 6, :country_id, :state_id,
+                    ST_SetSRID(ST_MakePoint(:lon, :lat), 4326), 0)
+        """), {
+            "h3_index": "862830807ffffff",
+            "country_id": test_country_usa.id,
+            "state_id": test_state_california.id,
+            "lon": -122.4,
+            "lat": 37.8,
+        })
+
+        # Add res8 cell
+        db_session.execute(text("""
+            INSERT INTO h3_cells (h3_index, res, country_id, state_id, centroid, visit_count)
+            VALUES (:h3_index, 8, :country_id, :state_id,
+                    ST_SetSRID(ST_MakePoint(:lon, :lat), 4326), 0)
+        """), {
+            "h3_index": "882830810ffffff",
+            "country_id": test_country_usa.id,
+            "state_id": test_state_california.id,
+            "lon": -122.4,
+            "lat": 37.8,
+        })
+
+        # Now create user visits
+        db_session.add(
+            UserCellVisit(
+                user_id=test_user.id,
+                h3_index="862830807ffffff",
+                res=6,
+            )
+        )
+
+        db_session.add(
+            UserCellVisit(
+                user_id=test_user.id,
+                h3_index="882830810ffffff",
+                res=8,
+            )
+        )
+
+        db_session.commit()
+
+        token = create_jwt_token(test_user.id, test_user.username)
+        response = client.get(
+            "/api/v1/stats/overview",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        data = response.json()
+
+        assert data["stats"]["cells_visited_res6"] == 1
+        assert data["stats"]["cells_visited_res8"] == 1
