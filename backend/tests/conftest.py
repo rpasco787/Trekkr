@@ -270,7 +270,7 @@ def jwt_secret_key() -> str:
 
 
 @pytest.fixture
-def valid_jwt_token(test_user: User, jwt_secret_key: str) -> str:
+def valid_jwt_token(test_user: User) -> str:
     """Create a valid JWT token for test_user."""
     payload = {
         "sub": str(test_user.id),
@@ -278,7 +278,7 @@ def valid_jwt_token(test_user: User, jwt_secret_key: str) -> str:
         "exp": datetime.utcnow() + timedelta(hours=1),
         "type": "access",  # Required by get_current_user
     }
-    return jwt.encode(payload, jwt_secret_key, algorithm="HS256")
+    return jwt.encode(payload, "test-secret-key", algorithm="HS256")
 
 
 @pytest.fixture
