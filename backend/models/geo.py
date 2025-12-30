@@ -56,6 +56,7 @@ class CountryRegion(Base):
     geom = Column(_geom_column("MULTIPOLYGON"), nullable=True)
     land_cells_total_resolution6 = Column(Integer, nullable=True)
     land_cells_total_resolution8 = Column(Integer, nullable=True)
+    continent = Column(String(32), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(
         DateTime,
