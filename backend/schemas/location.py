@@ -3,8 +3,10 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 import h3
+
+from schemas.achievements import AchievementUnlockedSchema
 
 
 class LocationIngestRequest(BaseModel):
@@ -87,3 +89,4 @@ class LocationIngestResponse(BaseModel):
     discoveries: DiscoveriesResponse
     revisits: RevisitsResponse
     visit_counts: VisitCountsResponse
+    achievements_unlocked: list[AchievementUnlockedSchema] = Field(default_factory=list)

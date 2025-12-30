@@ -1,6 +1,6 @@
 """Achievements API endpoints."""
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -23,16 +23,23 @@ def get_all_achievements(
     Returns the complete list of achievements in the system,
     with each achievement showing whether the current user has unlocked it.
     """
-    service = AchievementService(db, current_user.id)
-    all_achievements = service.get_all_with_status()
+    try:
+        service = AchievementService(db, current_user.id)
+        all_achievements = service.get_all_with_status()
 
-    unlocked_count = sum(1 for a in all_achievements if a["unlocked"])
+        unlocked_count = sum(1 for a in all_achievements if a["unlocked"])
 
-    return AchievementsListResponse(
-        achievements=[AchievementSchema(**a) for a in all_achievements],
-        total=len(all_achievements),
-        unlocked_count=unlocked_count,
-    )
+        return AchievementsListResponse(
+            achievements=[AchievementSchema(**a) for a in all_achievements],
+            total=len(all_achievements),
+            unlocked_count=unlocked_count,
+        )
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Failed to fetch achievements: {str(e)}"
+        )
 
 
 @router.get("/unlocked", response_model=UnlockedAchievementsResponse)
@@ -44,10 +51,17 @@ def get_unlocked_achievements(
 
     Returns achievements the current user has earned, sorted by unlock date.
     """
-    service = AchievementService(db, current_user.id)
-    unlocked = service.get_unlocked()
+    try:
+        service = AchievementService(db, current_user.id)
+        unlocked = service.get_unlocked()
 
-    return UnlockedAchievementsResponse(
-        achievements=[AchievementSchema(**a) for a in unlocked],
-        total=len(unlocked),
-    )
+        return UnlockedAchievementsResponse(
+            achievements=[AchievementSchema(**a) for a in unlocked],
+            total=len(unlocked),
+        )
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Failed to fetch unlocked achievements: {str(e)}"
+        )

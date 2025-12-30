@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from models.device import Device
 from models.geo import CountryRegion, H3Cell, StateRegion
 from models.visits import IngestBatch, UserCellVisit
+from services.achievement_service import AchievementService
 
 
 class LocationProcessor:
@@ -99,16 +100,32 @@ class LocationProcessor:
         # Record audit batch
         self._record_ingest_batch(device_id)
 
+        # Check and unlock achievements
+        achievement_service = AchievementService(self.db, self.user_id)
+        newly_unlocked = achievement_service.check_and_unlock()
+
         # Commit transaction
         self.db.commit()
 
         # Build response
-        return self._build_response(
+        response = self._build_response(
             res6_result=res6_result,
             res8_result=res8_result,
             country_id=country_id,
             state_id=state_id,
         )
+
+        # Add achievements to response
+        response["achievements_unlocked"] = [
+            {
+                "code": a.code,
+                "name": a.name,
+                "description": a.description,
+            }
+            for a in newly_unlocked
+        ]
+
+        return response
 
     def _reverse_geocode(
         self, latitude: float, longitude: float

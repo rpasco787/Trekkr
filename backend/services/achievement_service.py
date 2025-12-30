@@ -1,7 +1,7 @@
 """Achievement service for checking and unlocking achievements."""
 
 from datetime import datetime
-from typing import List, Optional
+from typing import List
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -19,7 +19,11 @@ class AchievementService:
     def check_and_unlock(self) -> List[Achievement]:
         """Check all achievements and unlock newly earned ones.
 
-        Returns list of newly unlocked achievements.
+        IMPORTANT: This method does **not** commit the transaction. It will `flush()`
+        new `UserAchievement` rows so they are visible within the current transaction,
+        but the **caller owns the commit boundary** (e.g. `LocationProcessor`).
+
+        Returns list of newly unlocked achievements (Achievement ORM objects).
         """
         # Get user stats
         stats = self._get_user_stats()
@@ -51,7 +55,9 @@ class AchievementService:
                 newly_unlocked.append(achievement)
 
         if newly_unlocked:
-            self.db.commit()
+            # Flush so subsequent queries in the same transaction can see unlocks.
+            # The caller (e.g., LocationProcessor) owns the final commit boundary.
+            self.db.flush()
 
         return newly_unlocked
 
@@ -237,4 +243,27 @@ class AchievementService:
 
     def get_unlocked(self) -> List[dict]:
         """Get only user's unlocked achievements."""
-        return [a for a in self.get_all_with_status() if a["unlocked"]]
+        result = self.db.execute(text("""
+            SELECT
+                a.code,
+                a.name,
+                a.description,
+                TRUE as unlocked,
+                ua.unlocked_at
+            FROM achievements a
+            INNER JOIN user_achievements ua
+                ON a.id = ua.achievement_id
+            WHERE ua.user_id = :user_id
+            ORDER BY ua.unlocked_at DESC
+        """), {"user_id": self.user_id}).fetchall()
+
+        return [
+            {
+                "code": row.code,
+                "name": row.name,
+                "description": row.description,
+                "unlocked": row.unlocked,
+                "unlocked_at": row.unlocked_at,
+            }
+            for row in result
+        ]

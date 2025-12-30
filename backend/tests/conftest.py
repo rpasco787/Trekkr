@@ -343,11 +343,13 @@ def assert_discovery_response(
     expected_new_cells_res8: int = 0,
     expected_revisit_cells_res6: int = 0,
     expected_revisit_cells_res8: int = 0,
+    expected_achievements_unlocked: Optional[list[str]] = None,
 ):
     """Helper to validate LocationIngestResponse structure and values."""
     assert "discoveries" in response_data
     assert "revisits" in response_data
     assert "visit_counts" in response_data
+    assert "achievements_unlocked" in response_data
 
     discoveries = response_data["discoveries"]
     revisits = response_data["revisits"]
@@ -376,3 +378,9 @@ def assert_discovery_response(
     # Check visit counts exist
     assert "res6_visit_count" in visit_counts
     assert "res8_visit_count" in visit_counts
+
+    # Check achievements if specified
+    if expected_achievements_unlocked is not None:
+        unlocked_codes = [a["code"] for a in response_data["achievements_unlocked"]]
+        for code in expected_achievements_unlocked:
+            assert code in unlocked_codes, f"Expected achievement {code} not found"

@@ -11,8 +11,10 @@ from typing import Any
 import h3
 import pytest
 from sqlalchemy import text
+from sqlalchemy.orm import Session
 
 from models.geo import CountryRegion, StateRegion
+from models.user import User
 from models.visits import IngestBatch
 from services.location_processor import LocationProcessor
 from tests.fixtures.test_data import (
@@ -102,7 +104,11 @@ class TestProcessLocation:
         ]
 
         # Mock _ensure_device to return device_id
-        with patch.object(processor, '_ensure_device', return_value=1):
+        with (
+            patch("services.location_processor.AchievementService") as mock_achievement_service,
+            patch.object(processor, "_ensure_device", return_value=1),
+        ):
+            mock_achievement_service.return_value.check_and_unlock.return_value = []
             # Execute
             result = processor.process_location(
                 latitude=SAN_FRANCISCO["latitude"],
@@ -123,6 +129,8 @@ class TestProcessLocation:
         assert "discoveries" in result
         assert "revisits" in result
         assert "visit_counts" in result
+        assert "achievements_unlocked" in result
+        assert result["achievements_unlocked"] == []
 
         # Verify discoveries
         assert result["discoveries"]["new_country"]["name"] == "United States"
@@ -158,11 +166,13 @@ class TestProcessLocation:
             ))),
         ]
 
-        result = processor.process_location(
-            latitude=SAN_FRANCISCO["latitude"],
-            longitude=SAN_FRANCISCO["longitude"],
-            h3_res8=SAN_FRANCISCO["h3_res8"],
-        )
+        with patch("services.location_processor.AchievementService") as mock_achievement_service:
+            mock_achievement_service.return_value.check_and_unlock.return_value = []
+            result = processor.process_location(
+                latitude=SAN_FRANCISCO["latitude"],
+                longitude=SAN_FRANCISCO["longitude"],
+                h3_res8=SAN_FRANCISCO["h3_res8"],
+            )
 
         # Verify res-6 cell in discoveries
         assert result["discoveries"]["new_cells_res6"][0] == expected_res6
@@ -191,12 +201,14 @@ class TestProcessLocation:
         ]
 
         # Should not raise an error (timestamp is used internally but not returned)
-        result = processor.process_location(
-            latitude=SAN_FRANCISCO["latitude"],
-            longitude=SAN_FRANCISCO["longitude"],
-            h3_res8=SAN_FRANCISCO["h3_res8"],
-            timestamp=custom_timestamp,
-        )
+        with patch("services.location_processor.AchievementService") as mock_achievement_service:
+            mock_achievement_service.return_value.check_and_unlock.return_value = []
+            result = processor.process_location(
+                latitude=SAN_FRANCISCO["latitude"],
+                longitude=SAN_FRANCISCO["longitude"],
+                h3_res8=SAN_FRANCISCO["h3_res8"],
+                timestamp=custom_timestamp,
+            )
 
         assert result is not None
 
@@ -222,7 +234,11 @@ class TestProcessLocation:
         ]
 
         # Mock _ensure_device to return device_id
-        with patch.object(processor, '_ensure_device', return_value=None):
+        with (
+            patch("services.location_processor.AchievementService") as mock_achievement_service,
+            patch.object(processor, "_ensure_device", return_value=None),
+        ):
+            mock_achievement_service.return_value.check_and_unlock.return_value = []
             result = processor.process_location(
                 latitude=SAN_FRANCISCO["latitude"],
                 longitude=SAN_FRANCISCO["longitude"],
@@ -230,6 +246,112 @@ class TestProcessLocation:
             )
 
         assert result is not None
+
+
+# ============================================================================
+# Achievement Integration Tests
+# ============================================================================
+
+
+@pytest.mark.integration
+class TestAchievementIntegration:
+    """Test achievement unlocking through location processor."""
+
+    def test_process_location_returns_achievements_unlocked_key(
+        self,
+        db_session: Session,
+        test_user: User,
+        test_country_usa: CountryRegion,
+        test_state_california: StateRegion,
+    ):
+        """Response should include achievements_unlocked field."""
+        from models.achievements import Achievement
+
+        # Seed first_steps achievement
+        achievement = Achievement(
+            code="first_steps",
+            name="First Steps",
+            description="Visit your first location",
+            criteria_json={"type": "cells_total", "threshold": 1},
+        )
+        db_session.add(achievement)
+        db_session.commit()
+
+        processor = LocationProcessor(db_session, test_user.id)
+        result = processor.process_location(
+            latitude=SAN_FRANCISCO["latitude"],
+            longitude=SAN_FRANCISCO["longitude"],
+            h3_res8=SAN_FRANCISCO["h3_res8"],
+        )
+
+        assert "achievements_unlocked" in result
+
+    def test_process_location_unlocks_first_steps(
+        self,
+        db_session: Session,
+        test_user: User,
+        test_country_usa: CountryRegion,
+        test_state_california: StateRegion,
+    ):
+        """First location should unlock first_steps achievement."""
+        from models.achievements import Achievement
+
+        achievement = Achievement(
+            code="first_steps",
+            name="First Steps",
+            description="Visit your first location",
+            criteria_json={"type": "cells_total", "threshold": 1},
+        )
+        db_session.add(achievement)
+        db_session.commit()
+
+        processor = LocationProcessor(db_session, test_user.id)
+        result = processor.process_location(
+            latitude=SAN_FRANCISCO["latitude"],
+            longitude=SAN_FRANCISCO["longitude"],
+            h3_res8=SAN_FRANCISCO["h3_res8"],
+        )
+
+        assert len(result["achievements_unlocked"]) >= 1
+        codes = [a["code"] for a in result["achievements_unlocked"]]
+        assert "first_steps" in codes
+
+    def test_process_location_no_duplicate_unlocks(
+        self,
+        db_session: Session,
+        test_user: User,
+        test_country_usa: CountryRegion,
+        test_state_california: StateRegion,
+    ):
+        """Revisiting should not re-unlock achievements."""
+        from models.achievements import Achievement
+
+        achievement = Achievement(
+            code="first_steps",
+            name="First Steps",
+            description="Visit your first location",
+            criteria_json={"type": "cells_total", "threshold": 1},
+        )
+        db_session.add(achievement)
+        db_session.commit()
+
+        processor = LocationProcessor(db_session, test_user.id)
+
+        # First visit unlocks
+        result1 = processor.process_location(
+            latitude=SAN_FRANCISCO["latitude"],
+            longitude=SAN_FRANCISCO["longitude"],
+            h3_res8=SAN_FRANCISCO["h3_res8"],
+        )
+        assert any(a["code"] == "first_steps" for a in result1["achievements_unlocked"])
+
+        # Second visit should not re-unlock
+        result2 = processor.process_location(
+            latitude=SAN_FRANCISCO["latitude"],
+            longitude=SAN_FRANCISCO["longitude"],
+            h3_res8=SAN_FRANCISCO["h3_res8"],
+        )
+        assert not any(a["code"] == "first_steps" for a in result2["achievements_unlocked"])
 
 
 # ============================================================================
