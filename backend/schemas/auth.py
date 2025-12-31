@@ -104,6 +104,25 @@ class ResetPasswordRequest(BaseModel):
         return validate_password_strength(v)
 
 
+class AccountDeleteRequest(BaseModel):
+    """Request schema for account deletion.
+
+    Requires both password verification and explicit confirmation
+    to prevent accidental account deletion.
+    """
+
+    password: str
+    confirmation: str
+
+    @field_validator("confirmation")
+    @classmethod
+    def validate_confirmation(cls, v: str) -> str:
+        """Ensure confirmation is exactly 'DELETE' (case-sensitive)."""
+        if v != "DELETE":
+            raise ValueError("Confirmation must be exactly 'DELETE'")
+        return v
+
+
 class DeviceUpdateRequest(BaseModel):
     """Request schema for updating device metadata."""
 
