@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import Response
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
@@ -7,6 +8,7 @@ from models.device import Device
 from models.user import User
 from routers.location import limiter
 from schemas.auth import (
+    AccountDeleteRequest,
     ChangePasswordRequest,
     DeviceResponse,
     DeviceUpdateRequest,
@@ -303,4 +305,54 @@ def update_device(
     db.refresh(device)
 
     return device
+
+
+@router.delete("/account", status_code=status.HTTP_204_NO_CONTENT)
+def delete_account(
+    request: AccountDeleteRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Permanently delete the authenticated user's account and all associated data.
+
+    This action is irreversible. Deletes:
+    - User account and credentials
+    - Device record
+    - All location visit history
+    - All achievement unlocks
+    - All ingestion batch records
+
+    Global H3 cell registry is preserved (shared across users).
+
+    Example request:
+    ```json
+    {
+      "password": "MySecurePass123",
+      "confirmation": "DELETE"
+    }
+    ```
+
+    The confirmation field must contain exactly "DELETE" (case-sensitive).
+
+    Requires: Authorization header with Bearer token
+    Body: password (current password), confirmation (must be "DELETE")
+    Returns: 204 No Content on success
+    Raises:
+      - 401 Unauthorized if password is incorrect
+      - 422 Validation Error if confirmation is invalid
+    """
+    # Verify current password
+    if not verify_password(request.password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid password",
+        )
+
+    # Delete user (CASCADE constraints handle related data automatically)
+    db.delete(current_user)
+    db.commit()
+
+    # Return 204 No Content (no response body)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
