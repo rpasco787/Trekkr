@@ -8,7 +8,12 @@ import h3
 
 from database import get_db
 from models.user import User
-from schemas.location import LocationIngestRequest, LocationIngestResponse
+from schemas.location import (
+    LocationIngestRequest,
+    LocationIngestResponse,
+    BatchLocationIngestRequest,
+    BatchLocationIngestResponse,
+)
 from services.auth import get_current_user
 from services.location_processor import LocationProcessor
 
@@ -77,6 +82,50 @@ def ingest_location(
             device_name=payload.device_name,
             platform=payload.platform,
             timestamp=payload.timestamp,
+        )
+        return result
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"error": "service_unavailable", "message": str(e)},
+        )
+
+
+@router.post("/ingest/batch", response_model=BatchLocationIngestResponse)
+@limiter.limit("30/minute")
+def ingest_location_batch(
+    request: Request,
+    payload: BatchLocationIngestRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Ingest a batch of locations (up to 100) efficiently.
+
+    Use this endpoint for:
+    - Syncing locations collected while offline
+    - Batching real-time location updates (every 5-10 minutes)
+
+    **Partial success**: Invalid locations are skipped with reasons,
+    valid locations are always processed.
+
+    **Rate limit**: 30 requests per minute per user.
+
+    For >100 locations, client should chunk into multiple requests.
+    """
+    # Store user_id in request state for rate limiting
+    request.state.user_id = current_user.id
+
+    # Process the batch
+    processor = LocationProcessor(db, current_user.id)
+
+    try:
+        result = processor.process_batch(
+            locations=payload.locations,
+            device_uuid=payload.device_uuid,
+            device_name=payload.device_name,
+            platform=payload.platform,
         )
         return result
     except Exception as e:

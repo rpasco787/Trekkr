@@ -186,10 +186,17 @@ The API will be available at:
 - `DELETE /api/auth/account` - Delete account
 
 ### Location Tracking
-- `POST /api/v1/location/ingest` - Upload visited H3 cells (rate limited: 120/min)
+- `POST /api/v1/location/ingest` - Upload single location (rate limited: 120/min)
   - Validates H3 cell matches GPS coordinates
   - Performs reverse geocoding to country/region
   - Returns newly discovered countries/regions
+
+- `POST /api/v1/location/ingest/batch` - Upload batch of locations (rate limited: 30/min)
+  - Accepts 1-100 locations per request
+  - Optimized bulk processing with efficient geocoding
+  - Partial success: invalid locations skipped with reasons
+  - Automatic deduplication within batch
+  - Returns aggregated discoveries and achievement unlocks
 
 ### Map Data
 - `GET /api/v1/map/summary` - Get all visited countries and regions
@@ -234,7 +241,7 @@ The API will be available at:
 
 ### Backend Tests
 
-The backend has comprehensive test coverage with 150+ integration tests:
+The backend has comprehensive test coverage with 176 integration tests:
 
 ```bash
 cd backend
@@ -256,7 +263,8 @@ TEST_DATABASE_URL="postgresql+psycopg2://appuser:apppass@localhost:5434/appdb_te
 ```
 
 **Test Coverage:**
-- ✅ Location ingestion and processing
+- ✅ Location ingestion (single and batch)
+- ✅ Batch processing with deduplication
 - ✅ Map endpoints and services
 - ✅ Statistics endpoints and services
 - ✅ Authentication and authorization
@@ -264,6 +272,7 @@ TEST_DATABASE_URL="postgresql+psycopg2://appuser:apppass@localhost:5434/appdb_te
 - ✅ H3 coordinate validation
 - ✅ Reverse geocoding
 - ✅ Discovery flow (first visits)
+- ✅ Partial success handling
 
 ## Database Schema
 
