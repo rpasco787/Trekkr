@@ -101,11 +101,16 @@ def mock_db_session() -> MagicMock:
 
 @pytest.fixture
 def test_user(db_session: Session) -> User:
-    """Create a test user for integration tests."""
+    """Create a test user for integration tests.
+
+    Password: TestPass123
+    """
+    from services.auth import hash_password
+
     user = User(
         username="test_user",
         email="test@example.com",
-        hashed_password="$2b$12$hashedpassword",  # bcrypt hash
+        hashed_password=hash_password("TestPass123"),  # Real bcrypt hash
     )
     db_session.add(user)
     db_session.commit()
@@ -291,6 +296,12 @@ def expired_jwt_token(test_user: User, jwt_secret_key: str) -> str:
         "exp": datetime.utcnow() - timedelta(hours=1),  # Expired
     }
     return jwt.encode(payload, jwt_secret_key, algorithm="HS256")
+
+
+@pytest.fixture
+def auth_headers(valid_jwt_token: str) -> dict:
+    """Create Authorization headers for authenticated requests."""
+    return {"Authorization": f"Bearer {valid_jwt_token}"}
 
 
 # ============================================================================
