@@ -15,7 +15,12 @@ class EmailService:
     """Handles sending emails via SendGrid."""
 
     def __init__(self):
-        self.api_key = SENDGRID_API_KEY
+        # Config values are read at import-time; restart the server after changing env.
+        raw_key = (SENDGRID_API_KEY or "").strip()
+        # Common misconfig: pasting "Bearer <key>" into env var.
+        if raw_key.lower().startswith("bearer "):
+            raw_key = raw_key.split(" ", 1)[1].strip()
+        self.api_key = raw_key
         self.from_email = SENDGRID_FROM_EMAIL
         self.app_name = "Trekkr"
         self.frontend_url = FRONTEND_URL
@@ -33,6 +38,18 @@ class EmailService:
             to_emails=to_email,
             subject=f"{self.app_name} - Reset Your Password",
             html_content=self._build_reset_email_html(username=username, reset_url=reset_url),
+        )
+
+        # Minimal diagnostics (no secrets/PII): helps catch env/key issues.
+        logger.info(
+            "send_password_reset: sendgrid_config",
+            extra={
+                "sendgrid_api_key_present": bool(self.api_key),
+                "sendgrid_api_key_len": len(self.api_key),
+                "sendgrid_api_key_starts_sg": self.api_key.startswith("SG."),
+                "sendgrid_from_email_set": bool(self.from_email),
+                "frontend_url_set": bool(self.frontend_url),
+            },
         )
 
         try:
