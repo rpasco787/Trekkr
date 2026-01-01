@@ -30,6 +30,8 @@ def validate_config() -> None:
 
     if not SECRET_KEY or SECRET_KEY == _DEFAULT_SECRET_KEY:
         errors.append("SECRET_KEY must be set to a secure value in production")
+    elif len(SECRET_KEY) < 32:
+        errors.append("SECRET_KEY must be at least 32 characters in production")
 
     if not SENDGRID_API_KEY:
         errors.append("SENDGRID_API_KEY must be set in production")
@@ -39,6 +41,8 @@ def validate_config() -> None:
 
     if not FRONTEND_URL or not FRONTEND_URL.startswith(("http://", "https://")):
         errors.append("FRONTEND_URL must be an http(s) URL in production")
+    elif FRONTEND_URL.startswith("http://") and not FRONTEND_URL.startswith("http://localhost"):
+        errors.append("FRONTEND_URL should use HTTPS in production (http:// only allowed for localhost)")
 
     if errors:
         raise RuntimeError("Invalid configuration:\n- " + "\n- ".join(errors))

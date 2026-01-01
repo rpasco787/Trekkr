@@ -57,6 +57,11 @@ class PasswordService:
         raw_token = secrets.token_urlsafe(32)
         token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
 
+        # Clean up expired tokens globally (prevents unbounded table growth)
+        self.db.query(PasswordResetToken).filter(
+            PasswordResetToken.expires_at < datetime.now(timezone.utc)
+        ).delete(synchronize_session=False)
+
         # Invalidate any existing unused tokens for this user
         self.db.query(PasswordResetToken).filter(
             PasswordResetToken.user_id == user.id,
