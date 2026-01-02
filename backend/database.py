@@ -71,7 +71,32 @@ def get_db():
 
 def is_sqlite_session(db) -> bool:
     """Check if the database session is using SQLite."""
-    return "sqlite" in str(db.bind.url) if db.bind else False
+    if db is None:
+        return False
+
+    # `Session.bind` can be an Engine or a Connection depending on how the
+    # session was constructed (tests often bind to a Connection for per-test
+    # transactions). Prefer dialect name since it exists on both.
+    bind = None
+    try:
+        if hasattr(db, "get_bind"):
+            bind = db.get_bind()
+        elif hasattr(db, "bind"):
+            bind = db.bind
+    except Exception:
+        bind = getattr(db, "bind", None)
+
+    if bind is None:
+        return False
+
+    dialect = getattr(bind, "dialect", None)
+    dialect_name = getattr(dialect, "name", None)
+    if dialect_name:
+        return dialect_name == "sqlite"
+
+    # Fallback: engines have `.url`; connections do not.
+    url = getattr(bind, "url", None)
+    return str(url).startswith("sqlite") if url is not None else False
 
 
 def init_db():
