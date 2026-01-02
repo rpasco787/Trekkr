@@ -5,7 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { Colors } from "@/constants/theme";
 import { Ionicons } from "@expo/vector-icons";
-import { getStatsOverview, StatsOverviewResponse } from "@/services/api";
+import { getStatsOverview, StatsOverviewResponse, getAchievements, AchievementsListResponse } from "@/services/api";
 import { tokenStorage } from "@/services/storage";
 
 export default function ProfileScreen() {
@@ -13,18 +13,23 @@ export default function ProfileScreen() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
   const [stats, setStats] = useState<StatsOverviewResponse | null>(null);
+  const [achievements, setAchievements] = useState<AchievementsListResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const fetchStats = useCallback(async () => {
+  const fetchData = useCallback(async () => {
     try {
       const token = await tokenStorage.getAccessToken();
       if (token) {
-        const data = await getStatsOverview(token);
-        setStats(data);
+        const [statsData, achievementsData] = await Promise.all([
+          getStatsOverview(token),
+          getAchievements(token),
+        ]);
+        setStats(statsData);
+        setAchievements(achievementsData);
       }
     } catch (error) {
-      console.error("Failed to fetch stats:", error);
+      console.error("Failed to fetch profile data:", error);
     } finally {
       setIsLoading(false);
       setRefreshing(false);
@@ -32,13 +37,13 @@ export default function ProfileScreen() {
   }, []);
 
   useEffect(() => {
-    fetchStats();
-  }, [fetchStats]);
+    fetchData();
+  }, [fetchData]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    fetchStats();
-  }, [fetchStats]);
+    fetchData();
+  }, [fetchData]);
 
   const handleLogout = () => {
     Alert.alert(
@@ -205,6 +210,67 @@ export default function ProfileScreen() {
           </View>
         )}
 
+        {/* Achievements Section */}
+        {achievements && achievements.achievements.length > 0 && (
+          <View style={styles.achievementsSection}>
+            <View style={styles.achievementsHeader}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                Achievements
+              </Text>
+              <Text style={[styles.achievementsCount, { color: colors.icon }]}>
+                {achievements.unlocked_count}/{achievements.total}
+              </Text>
+            </View>
+            <View style={styles.achievementsGrid}>
+              {achievements.achievements.map((achievement) => (
+                <View
+                  key={achievement.code}
+                  style={[
+                    styles.achievementCard,
+                    {
+                      backgroundColor: achievement.unlocked
+                        ? colors.tint + '15'
+                        : colors.icon + '10',
+                      borderColor: achievement.unlocked
+                        ? colors.tint + '30'
+                        : colors.icon + '20',
+                    }
+                  ]}
+                >
+                  <View style={[
+                    styles.achievementIconContainer,
+                    {
+                      backgroundColor: achievement.unlocked
+                        ? colors.tint
+                        : colors.icon + '40',
+                    }
+                  ]}>
+                    <Ionicons
+                      name={achievement.unlocked ? "trophy" : "trophy-outline"}
+                      size={20}
+                      color={achievement.unlocked ? "#fff" : colors.icon}
+                    />
+                  </View>
+                  <Text
+                    style={[
+                      styles.achievementName,
+                      { color: achievement.unlocked ? colors.text : colors.icon }
+                    ]}
+                    numberOfLines={2}
+                  >
+                    {achievement.name}
+                  </Text>
+                  {achievement.unlocked && achievement.unlocked_at && (
+                    <Text style={[styles.achievementDate, { color: colors.icon }]}>
+                      {formatDate(achievement.unlocked_at)}
+                    </Text>
+                  )}
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
         <TouchableOpacity
           style={styles.logoutButton}
           onPress={handleLogout}
@@ -313,6 +379,48 @@ const styles = StyleSheet.create({
   },
   recentItemDate: {
     fontSize: 14,
+  },
+  achievementsSection: {
+    marginBottom: 24,
+  },
+  achievementsHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  achievementsCount: {
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  achievementsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+  },
+  achievementCard: {
+    width: "47%",
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: "center",
+  },
+  achievementIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  achievementName: {
+    fontSize: 13,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  achievementDate: {
+    fontSize: 11,
+    marginTop: 4,
   },
   emptyStats: {
     alignItems: "center",

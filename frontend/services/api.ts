@@ -357,3 +357,30 @@ export async function getStatsOverview(
     );
 }
 
+// Achievements Types
+export interface Achievement {
+    code: string;
+    name: string;
+    description: string | null;
+    unlocked: boolean;
+    unlocked_at: string | null;
+}
+
+export interface AchievementsListResponse {
+    achievements: Achievement[];
+    total: number;
+    unlocked_count: number;
+}
+
+export async function getAchievements(
+    accessToken: string
+): Promise<AchievementsListResponse> {
+    return authenticatedRequest<AchievementsListResponse>(
+        API_ENDPOINTS.ACHIEVEMENTS.LIST,
+        accessToken,
+        {
+            method: 'GET',
+        }
+    );
+}
+

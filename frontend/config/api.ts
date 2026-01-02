@@ -44,5 +44,9 @@ export const API_ENDPOINTS = {
         COUNTRIES: "/api/v1/stats/countries",
         REGIONS: "/api/v1/stats/regions",
     },
+    ACHIEVEMENTS: {
+        LIST: "/api/v1/achievements",
+        UNLOCKED: "/api/v1/achievements/unlocked",
+    },
 } as const;
 

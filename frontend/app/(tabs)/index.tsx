@@ -7,6 +7,8 @@ import {
   Alert,
   TouchableOpacity,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import Mapbox, { MapView, Camera, LocationPuck } from "@rnmapbox/maps";
 import { MAPBOX_ACCESS_TOKEN } from "@/config/mapbox";
@@ -454,30 +456,48 @@ export default function MapScreen() {
         )}
       </MapView>
 
-      {/* My Location button */}
-      <TouchableOpacity
-        style={styles.locationButton}
-        onPress={zoomToCurrentLocation}
-      >
-        <Text style={styles.locationButtonIcon}>📍</Text>
-      </TouchableOpacity>
+      {/* Top left control buttons */}
+      <SafeAreaView style={styles.controlsContainer} edges={['top']} pointerEvents="box-none">
+        <View style={styles.controlsColumn}>
+          {/* Tracking toggle button */}
+          <TouchableOpacity
+            style={[
+              styles.controlButton,
+              isTracking && styles.controlButtonActive,
+            ]}
+            onPress={toggleTracking}
+          >
+            <Ionicons
+              name={isTracking ? "pause" : "play"}
+              size={22}
+              color={isTracking ? "#fff" : "#333"}
+            />
+          </TouchableOpacity>
 
-      {/* Tracking toggle button */}
-      <TouchableOpacity
-        style={[
-          styles.trackingButton,
-          isTracking && styles.trackingButtonActive,
-        ]}
-        onPress={toggleTracking}
-      >
-        <Text style={styles.trackingButtonText}>
-          {isTracking ? "Tracking" : "Start Tracking"}
-        </Text>
-      </TouchableOpacity>
+          {/* My Location button */}
+          <TouchableOpacity
+            style={styles.controlButton}
+            onPress={zoomToCurrentLocation}
+          >
+            <Ionicons name="locate" size={22} color="#333" />
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+
+      {/* Tracking indicator pill */}
+      {isTracking && (
+        <SafeAreaView style={styles.trackingIndicatorContainer} edges={['top']} pointerEvents="none">
+          <View style={styles.trackingIndicator}>
+            <View style={styles.trackingDot} />
+            <Text style={styles.trackingIndicatorText}>Tracking</Text>
+          </View>
+        </SafeAreaView>
+      )}
 
       {/* Discovery notification */}
       {lastDiscovery && (
         <View style={styles.discoveryNotification}>
+          <Ionicons name="sparkles" size={20} color="#fff" style={styles.discoveryIcon} />
           <Text style={styles.discoveryText}>{lastDiscovery}</Text>
         </View>
       )}
@@ -516,66 +536,83 @@ const styles = StyleSheet.create({
     color: "#666",
     textAlign: "center",
   },
-  locationButton: {
+  controlsContainer: {
     position: "absolute",
-    bottom: 170,
-    right: 16,
+    top: 0,
+    left: 16,
+  },
+  controlsColumn: {
+    flexDirection: "column",
+    gap: 12,
+  },
+  controlButton: {
     backgroundColor: "#fff",
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     justifyContent: "center",
     alignItems: "center",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  locationButtonIcon: {
-    fontSize: 22,
-  },
-  trackingButton: {
-    position: "absolute",
-    bottom: 100,
-    right: 16,
-    backgroundColor: "#333",
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 25,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  trackingButtonActive: {
+  controlButtonActive: {
     backgroundColor: "#10b981",
   },
-  trackingButtonText: {
+  trackingIndicatorContainer: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+  },
+  trackingIndicator: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(16, 185, 129, 0.9)",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 8,
+  },
+  trackingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#fff",
+  },
+  trackingIndicatorText: {
     color: "#fff",
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "600",
   },
   discoveryNotification: {
     position: "absolute",
-    top: 60,
+    bottom: 100,
     left: 16,
     right: 16,
-    backgroundColor: "#10b981",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(16, 185, 129, 0.95)",
     paddingHorizontal: 20,
     paddingVertical: 14,
-    borderRadius: 12,
+    borderRadius: 16,
+    gap: 10,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  discoveryIcon: {
+    marginRight: 2,
   },
   discoveryText: {
     color: "#fff",
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "600",
-    textAlign: "center",
   },
 });
