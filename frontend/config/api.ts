@@ -29,6 +29,10 @@ export const API_ENDPOINTS = {
         LOGOUT: "/api/auth/logout",
         REFRESH: "/api/auth/refresh",
         ME: "/api/auth/me",
+        FORGOT_PASSWORD: "/api/auth/forgot-password",
+        RESET_PASSWORD: "/api/auth/reset-password",
+        CHANGE_PASSWORD: "/api/auth/change-password",
+        DELETE_ACCOUNT: "/api/auth/account",
     },
     MAP: {
         SUMMARY: "/api/v1/map/summary",

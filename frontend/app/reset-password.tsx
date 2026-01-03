@@ -13,32 +13,76 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { useAuth } from '@/contexts/AuthContext';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Colors } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
+import { resetPassword } from '@/services/api';
 
-export default function LoginScreen() {
-    const [username, setUsername] = useState('');
+export default function ResetPasswordScreen() {
+    const [token, setToken] = useState('');
     const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const { login } = useAuth();
     const router = useRouter();
     const colorScheme = useColorScheme();
     const colors = Colors[colorScheme ?? 'light'];
 
-    const handleLogin = async () => {
-        if (!username.trim() || !password.trim()) {
-            Alert.alert('Error', 'Please fill in all fields');
+    const validateForm = (): string | null => {
+        if (!token.trim() || !password.trim() || !confirmPassword.trim()) {
+            return 'Please fill in all fields';
+        }
+
+        if (password.length < 8) {
+            return 'Password must be at least 8 characters long';
+        }
+
+        if (!/[a-z]/.test(password)) {
+            return 'Password must contain at least one lowercase letter';
+        }
+
+        if (!/[A-Z]/.test(password)) {
+            return 'Password must contain at least one uppercase letter';
+        }
+
+        if (!/[0-9]/.test(password)) {
+            return 'Password must contain at least one number';
+        }
+
+        if (password !== confirmPassword) {
+            return 'Passwords do not match';
+        }
+
+        return null;
+    };
+
+    const handleSubmit = async () => {
+        const validationError = validateForm();
+        if (validationError) {
+            Alert.alert('Validation Error', validationError);
             return;
         }
 
         setIsLoading(true);
         try {
-            await login(username.trim(), password);
-            router.replace('/(tabs)');
+            await resetPassword({
+                token: token.trim(),
+                new_password: password,
+            });
+            Alert.alert(
+                'Success',
+                'Your password has been reset. Please sign in with your new password.',
+                [
+                    {
+                        text: 'Sign In',
+                        onPress: () => router.replace('/login'),
+                    },
+                ]
+            );
         } catch (error: any) {
-            Alert.alert('Login Failed', error.message || 'Invalid credentials');
+            Alert.alert(
+                'Reset Failed',
+                error.message || 'Invalid, expired, or already used reset code'
+            );
         } finally {
             setIsLoading(false);
         }
@@ -59,30 +103,27 @@ export default function LoginScreen() {
                         {/* Logo Section */}
                         <View style={styles.logoSection}>
                             <View style={[styles.logoContainer, { backgroundColor: colors.tint }]}>
-                                <Ionicons name="compass" size={48} color="#fff" />
+                                <Ionicons name="shield-checkmark" size={48} color="#fff" />
                             </View>
-                            <Text style={[styles.appName, { color: colors.text }]}>Trekkr</Text>
+                            <Text style={[styles.appName, { color: colors.text }]}>Reset Password</Text>
                             <Text style={[styles.tagline, { color: colors.icon }]}>
-                                Explore the world, one step at a time
+                                Enter the code from your email and create a new password
                             </Text>
                         </View>
 
                         {/* Form Card */}
                         <View style={[styles.formCard, { backgroundColor: colorScheme === 'dark' ? '#1a1a1a' : '#fff', borderColor: colors.icon + '30' }]}>
-                            <Text style={[styles.formTitle, { color: colors.text }]}>Welcome Back</Text>
-
                             <View style={styles.inputContainer}>
                                 <View style={[styles.inputWrapper, { backgroundColor: colorScheme === 'dark' ? '#252525' : '#f5f5f5', borderColor: colors.icon + '30' }]}>
-                                    <Ionicons name="person-outline" size={20} color={colors.icon} style={styles.inputIcon} />
+                                    <Ionicons name="key-outline" size={20} color={colors.icon} style={styles.inputIcon} />
                                     <TextInput
                                         style={[styles.input, { color: colors.text }]}
-                                        placeholder="Email or Username"
+                                        placeholder="Reset code from email"
                                         placeholderTextColor={colors.icon}
-                                        value={username}
-                                        onChangeText={setUsername}
+                                        value={token}
+                                        onChangeText={setToken}
                                         autoCapitalize="none"
                                         autoCorrect={false}
-                                        keyboardType="email-address"
                                         editable={!isLoading}
                                     />
                                 </View>
@@ -93,7 +134,7 @@ export default function LoginScreen() {
                                     <Ionicons name="lock-closed-outline" size={20} color={colors.icon} style={styles.inputIcon} />
                                     <TextInput
                                         style={[styles.input, { color: colors.text }]}
-                                        placeholder="Password"
+                                        placeholder="New password"
                                         placeholderTextColor={colors.icon}
                                         value={password}
                                         onChangeText={setPassword}
@@ -102,29 +143,38 @@ export default function LoginScreen() {
                                         editable={!isLoading}
                                     />
                                 </View>
+                                <Text style={[styles.hint, { color: colors.icon }]}>
+                                    8+ chars with uppercase, lowercase & number
+                                </Text>
+                            </View>
+
+                            <View style={styles.inputContainer}>
+                                <View style={[styles.inputWrapper, { backgroundColor: colorScheme === 'dark' ? '#252525' : '#f5f5f5', borderColor: colors.icon + '30' }]}>
+                                    <Ionicons name="shield-checkmark-outline" size={20} color={colors.icon} style={styles.inputIcon} />
+                                    <TextInput
+                                        style={[styles.input, { color: colors.text }]}
+                                        placeholder="Confirm new password"
+                                        placeholderTextColor={colors.icon}
+                                        value={confirmPassword}
+                                        onChangeText={setConfirmPassword}
+                                        secureTextEntry
+                                        autoCapitalize="none"
+                                        editable={!isLoading}
+                                    />
+                                </View>
                             </View>
 
                             <TouchableOpacity
-                                onPress={() => router.push('/forgot-password')}
-                                disabled={isLoading}
-                                style={styles.forgotPasswordLink}
-                            >
-                                <Text style={[styles.forgotPasswordText, { color: colors.tint }]}>
-                                    Forgot Password?
-                                </Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
                                 style={[styles.button, isLoading && styles.buttonDisabled]}
-                                onPress={handleLogin}
+                                onPress={handleSubmit}
                                 disabled={isLoading}
                             >
                                 {isLoading ? (
                                     <ActivityIndicator color="#fff" />
                                 ) : (
                                     <>
-                                        <Text style={styles.buttonText}>Sign In</Text>
-                                        <Ionicons name="arrow-forward" size={20} color="#fff" style={styles.buttonIcon} />
+                                        <Text style={styles.buttonText}>Reset Password</Text>
+                                        <Ionicons name="checkmark-circle" size={20} color="#fff" style={styles.buttonIcon} />
                                     </>
                                 )}
                             </TouchableOpacity>
@@ -133,13 +183,13 @@ export default function LoginScreen() {
                         {/* Footer */}
                         <View style={styles.footer}>
                             <Text style={[styles.footerText, { color: colors.icon }]}>
-                                {"Don't have an account? "}
+                                Remember your password?{' '}
                             </Text>
                             <TouchableOpacity
-                                onPress={() => router.push('/signup')}
+                                onPress={() => router.push('/login')}
                                 disabled={isLoading}
                             >
-                                <Text style={[styles.link, { color: colors.tint }]}>Sign Up</Text>
+                                <Text style={[styles.link, { color: colors.tint }]}>Sign In</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -166,7 +216,7 @@ const styles = StyleSheet.create({
     },
     logoSection: {
         alignItems: 'center',
-        marginBottom: 32,
+        marginBottom: 24,
     },
     logoContainer: {
         width: 100,
@@ -177,25 +227,22 @@ const styles = StyleSheet.create({
         marginBottom: 16,
     },
     appName: {
-        fontSize: 36,
+        fontSize: 28,
         fontWeight: 'bold',
         marginBottom: 8,
+        textAlign: 'center',
     },
     tagline: {
-        fontSize: 16,
+        fontSize: 15,
         textAlign: 'center',
+        lineHeight: 22,
+        paddingHorizontal: 16,
     },
     formCard: {
         borderRadius: 16,
         padding: 24,
         borderWidth: 1,
         marginBottom: 24,
-    },
-    formTitle: {
-        fontSize: 24,
-        fontWeight: '600',
-        marginBottom: 24,
-        textAlign: 'center',
     },
     inputContainer: {
         marginBottom: 16,
@@ -216,13 +263,10 @@ const styles = StyleSheet.create({
         fontSize: 16,
         height: '100%',
     },
-    forgotPasswordLink: {
-        alignSelf: 'flex-end',
-        marginBottom: 24,
-    },
-    forgotPasswordText: {
-        fontSize: 14,
-        fontWeight: '600',
+    hint: {
+        fontSize: 12,
+        marginTop: 6,
+        marginLeft: 4,
     },
     button: {
         backgroundColor: '#10b981',
@@ -231,6 +275,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'center',
         alignItems: 'center',
+        marginTop: 8,
     },
     buttonDisabled: {
         opacity: 0.6,

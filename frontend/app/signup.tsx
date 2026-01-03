@@ -11,10 +11,12 @@ import {
     Platform,
     ScrollView,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Colors } from '@/constants/theme';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function SignupScreen() {
     const [email, setEmail] = useState('');
@@ -86,126 +88,120 @@ export default function SignupScreen() {
     };
 
     return (
-        <KeyboardAvoidingView
-            style={[styles.container, { backgroundColor: colors.background }]}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
-            <ScrollView
-                contentContainerStyle={styles.scrollContent}
-                keyboardShouldPersistTaps="handled"
+        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
+            <KeyboardAvoidingView
+                style={styles.keyboardView}
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             >
-                <View style={styles.content}>
-                    <Text style={[styles.title, { color: colors.text }]}>Create Account</Text>
-                    <Text style={[styles.subtitle, { color: colors.icon }]}>
-                        Sign up to get started
-                    </Text>
-
-                    <View style={styles.form}>
-                        <View style={styles.inputContainer}>
-                            <Text style={[styles.label, { color: colors.text }]}>Email</Text>
-                            <TextInput
-                                style={[
-                                    styles.input,
-                                    {
-                                        backgroundColor: colorScheme === 'dark' ? '#1a1a1a' : '#f5f5f5',
-                                        color: colors.text,
-                                        borderColor: colors.icon,
-                                    },
-                                ]}
-                                placeholder="Enter your email"
-                                placeholderTextColor={colors.icon}
-                                value={email}
-                                onChangeText={setEmail}
-                                autoCapitalize="none"
-                                autoCorrect={false}
-                                keyboardType="email-address"
-                                editable={!isLoading}
-                            />
-                        </View>
-
-                        <View style={styles.inputContainer}>
-                            <Text style={[styles.label, { color: colors.text }]}>Username</Text>
-                            <TextInput
-                                style={[
-                                    styles.input,
-                                    {
-                                        backgroundColor: colorScheme === 'dark' ? '#1a1a1a' : '#f5f5f5',
-                                        color: colors.text,
-                                        borderColor: colors.icon,
-                                    },
-                                ]}
-                                placeholder="Choose a username"
-                                placeholderTextColor={colors.icon}
-                                value={username}
-                                onChangeText={setUsername}
-                                autoCapitalize="none"
-                                autoCorrect={false}
-                                editable={!isLoading}
-                            />
-                            <Text style={[styles.hint, { color: colors.icon }]}>
-                                3-50 characters, letters, numbers, and underscores only
+                <ScrollView
+                    contentContainerStyle={styles.scrollContent}
+                    keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator={false}
+                >
+                    <View style={styles.content}>
+                        {/* Logo Section */}
+                        <View style={styles.logoSection}>
+                            <View style={[styles.logoContainer, { backgroundColor: colors.tint }]}>
+                                <Ionicons name="compass" size={40} color="#fff" />
+                            </View>
+                            <Text style={[styles.appName, { color: colors.text }]}>Join Trekkr</Text>
+                            <Text style={[styles.tagline, { color: colors.icon }]}>
+                                Start your journey today
                             </Text>
                         </View>
 
-                        <View style={styles.inputContainer}>
-                            <Text style={[styles.label, { color: colors.text }]}>Password</Text>
-                            <TextInput
-                                style={[
-                                    styles.input,
-                                    {
-                                        backgroundColor: colorScheme === 'dark' ? '#1a1a1a' : '#f5f5f5',
-                                        color: colors.text,
-                                        borderColor: colors.icon,
-                                    },
-                                ]}
-                                placeholder="Create a password"
-                                placeholderTextColor={colors.icon}
-                                value={password}
-                                onChangeText={setPassword}
-                                secureTextEntry
-                                autoCapitalize="none"
-                                editable={!isLoading}
-                            />
-                            <Text style={[styles.hint, { color: colors.icon }]}>
-                                At least 8 characters with uppercase, lowercase, and number
-                            </Text>
+                        {/* Form Card */}
+                        <View style={[styles.formCard, { backgroundColor: colorScheme === 'dark' ? '#1a1a1a' : '#fff', borderColor: colors.icon + '30' }]}>
+                            <View style={styles.inputContainer}>
+                                <View style={[styles.inputWrapper, { backgroundColor: colorScheme === 'dark' ? '#252525' : '#f5f5f5', borderColor: colors.icon + '30' }]}>
+                                    <Ionicons name="mail-outline" size={20} color={colors.icon} style={styles.inputIcon} />
+                                    <TextInput
+                                        style={[styles.input, { color: colors.text }]}
+                                        placeholder="Email"
+                                        placeholderTextColor={colors.icon}
+                                        value={email}
+                                        onChangeText={setEmail}
+                                        autoCapitalize="none"
+                                        autoCorrect={false}
+                                        keyboardType="email-address"
+                                        editable={!isLoading}
+                                    />
+                                </View>
+                            </View>
+
+                            <View style={styles.inputContainer}>
+                                <View style={[styles.inputWrapper, { backgroundColor: colorScheme === 'dark' ? '#252525' : '#f5f5f5', borderColor: colors.icon + '30' }]}>
+                                    <Ionicons name="person-outline" size={20} color={colors.icon} style={styles.inputIcon} />
+                                    <TextInput
+                                        style={[styles.input, { color: colors.text }]}
+                                        placeholder="Username"
+                                        placeholderTextColor={colors.icon}
+                                        value={username}
+                                        onChangeText={setUsername}
+                                        autoCapitalize="none"
+                                        autoCorrect={false}
+                                        editable={!isLoading}
+                                    />
+                                </View>
+                                <Text style={[styles.hint, { color: colors.icon }]}>
+                                    Letters, numbers, and underscores only
+                                </Text>
+                            </View>
+
+                            <View style={styles.inputContainer}>
+                                <View style={[styles.inputWrapper, { backgroundColor: colorScheme === 'dark' ? '#252525' : '#f5f5f5', borderColor: colors.icon + '30' }]}>
+                                    <Ionicons name="lock-closed-outline" size={20} color={colors.icon} style={styles.inputIcon} />
+                                    <TextInput
+                                        style={[styles.input, { color: colors.text }]}
+                                        placeholder="Password"
+                                        placeholderTextColor={colors.icon}
+                                        value={password}
+                                        onChangeText={setPassword}
+                                        secureTextEntry
+                                        autoCapitalize="none"
+                                        editable={!isLoading}
+                                    />
+                                </View>
+                                <Text style={[styles.hint, { color: colors.icon }]}>
+                                    8+ chars with uppercase, lowercase & number
+                                </Text>
+                            </View>
+
+                            <View style={styles.inputContainer}>
+                                <View style={[styles.inputWrapper, { backgroundColor: colorScheme === 'dark' ? '#252525' : '#f5f5f5', borderColor: colors.icon + '30' }]}>
+                                    <Ionicons name="shield-checkmark-outline" size={20} color={colors.icon} style={styles.inputIcon} />
+                                    <TextInput
+                                        style={[styles.input, { color: colors.text }]}
+                                        placeholder="Confirm Password"
+                                        placeholderTextColor={colors.icon}
+                                        value={confirmPassword}
+                                        onChangeText={setConfirmPassword}
+                                        secureTextEntry
+                                        autoCapitalize="none"
+                                        editable={!isLoading}
+                                    />
+                                </View>
+                            </View>
+
+                            <TouchableOpacity
+                                style={[styles.button, isLoading && styles.buttonDisabled]}
+                                onPress={handleSignup}
+                                disabled={isLoading}
+                            >
+                                {isLoading ? (
+                                    <ActivityIndicator color="#fff" />
+                                ) : (
+                                    <>
+                                        <Text style={styles.buttonText}>Create Account</Text>
+                                        <Ionicons name="arrow-forward" size={20} color="#fff" style={styles.buttonIcon} />
+                                    </>
+                                )}
+                            </TouchableOpacity>
                         </View>
 
-                        <View style={styles.inputContainer}>
-                            <Text style={[styles.label, { color: colors.text }]}>Confirm Password</Text>
-                            <TextInput
-                                style={[
-                                    styles.input,
-                                    {
-                                        backgroundColor: colorScheme === 'dark' ? '#1a1a1a' : '#f5f5f5',
-                                        color: colors.text,
-                                        borderColor: colors.icon,
-                                    },
-                                ]}
-                                placeholder="Confirm your password"
-                                placeholderTextColor={colors.icon}
-                                value={confirmPassword}
-                                onChangeText={setConfirmPassword}
-                                secureTextEntry
-                                autoCapitalize="none"
-                                editable={!isLoading}
-                            />
-                        </View>
-
-                        <TouchableOpacity
-                            style={[styles.button, isLoading && styles.buttonDisabled]}
-                            onPress={handleSignup}
-                            disabled={isLoading}
-                        >
-                            {isLoading ? (
-                                <ActivityIndicator color="#fff" />
-                            ) : (
-                                <Text style={styles.buttonText}>Sign Up</Text>
-                            )}
-                        </TouchableOpacity>
-
+                        {/* Footer */}
                         <View style={styles.footer}>
-                            <Text style={[styles.footerText, { color: colors.text }]}>
+                            <Text style={[styles.footerText, { color: colors.icon }]}>
                                 Already have an account?{' '}
                             </Text>
                             <TouchableOpacity
@@ -216,14 +212,17 @@ export default function SignupScreen() {
                             </TouchableOpacity>
                         </View>
                     </View>
-                </View>
-            </ScrollView>
-        </KeyboardAvoidingView>
+                </ScrollView>
+            </KeyboardAvoidingView>
+        </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
     container: {
+        flex: 1,
+    },
+    keyboardView: {
         flex: 1,
     },
     scrollContent: {
@@ -234,43 +233,62 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         padding: 24,
     },
-    title: {
-        fontSize: 32,
+    logoSection: {
+        alignItems: 'center',
+        marginBottom: 24,
+    },
+    logoContainer: {
+        width: 80,
+        height: 80,
+        borderRadius: 24,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 12,
+    },
+    appName: {
+        fontSize: 28,
         fontWeight: 'bold',
-        marginBottom: 8,
+        marginBottom: 4,
+    },
+    tagline: {
+        fontSize: 15,
         textAlign: 'center',
     },
-    subtitle: {
-        fontSize: 16,
-        marginBottom: 32,
-        textAlign: 'center',
-    },
-    form: {
-        width: '100%',
+    formCard: {
+        borderRadius: 16,
+        padding: 24,
+        borderWidth: 1,
+        marginBottom: 24,
     },
     inputContainer: {
-        marginBottom: 20,
+        marginBottom: 16,
     },
-    label: {
-        fontSize: 14,
-        fontWeight: '600',
-        marginBottom: 8,
+    inputWrapper: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        height: 56,
+        borderWidth: 1,
+        borderRadius: 12,
+        paddingHorizontal: 16,
+    },
+    inputIcon: {
+        marginRight: 12,
     },
     input: {
-        height: 50,
-        borderWidth: 1,
-        borderRadius: 8,
-        paddingHorizontal: 16,
+        flex: 1,
         fontSize: 16,
+        height: '100%',
     },
     hint: {
         fontSize: 12,
-        marginTop: 4,
+        marginTop: 6,
+        marginLeft: 4,
     },
     button: {
         backgroundColor: '#10b981',
-        height: 50,
-        borderRadius: 8,
+        height: 56,
+        borderRadius: 12,
+        flexDirection: 'row',
         justifyContent: 'center',
         alignItems: 'center',
         marginTop: 8,
@@ -280,20 +298,21 @@ const styles = StyleSheet.create({
     },
     buttonText: {
         color: '#fff',
-        fontSize: 16,
+        fontSize: 18,
         fontWeight: '600',
+    },
+    buttonIcon: {
+        marginLeft: 8,
     },
     footer: {
         flexDirection: 'row',
         justifyContent: 'center',
-        marginTop: 24,
     },
     footerText: {
-        fontSize: 14,
+        fontSize: 15,
     },
     link: {
-        fontSize: 14,
+        fontSize: 15,
         fontWeight: '600',
     },
 });
-

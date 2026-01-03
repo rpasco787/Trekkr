@@ -30,6 +30,29 @@ export interface ApiError {
     message?: string;
 }
 
+export interface ForgotPasswordData {
+    email: string;
+}
+
+export interface ResetPasswordData {
+    token: string;
+    new_password: string;
+}
+
+export interface MessageResponse {
+    message: string;
+}
+
+export interface ChangePasswordData {
+    current_password: string;
+    new_password: string;
+}
+
+export interface DeleteAccountData {
+    password: string;
+    confirmation: string;
+}
+
 async function apiRequest<T>(
     endpoint: string,
     options: RequestInit = {}
@@ -119,6 +142,52 @@ export async function refreshToken(
         method: 'POST',
         body: JSON.stringify({ refresh_token: refreshToken }),
     });
+}
+
+export async function forgotPassword(
+    data: ForgotPasswordData
+): Promise<MessageResponse> {
+    return apiRequest<MessageResponse>(API_ENDPOINTS.AUTH.FORGOT_PASSWORD, {
+        method: 'POST',
+        body: JSON.stringify(data),
+    });
+}
+
+export async function resetPassword(
+    data: ResetPasswordData
+): Promise<MessageResponse> {
+    return apiRequest<MessageResponse>(API_ENDPOINTS.AUTH.RESET_PASSWORD, {
+        method: 'POST',
+        body: JSON.stringify(data),
+    });
+}
+
+export async function changePassword(
+    accessToken: string,
+    data: ChangePasswordData
+): Promise<MessageResponse> {
+    return authenticatedRequest<MessageResponse>(
+        API_ENDPOINTS.AUTH.CHANGE_PASSWORD,
+        accessToken,
+        {
+            method: 'POST',
+            body: JSON.stringify(data),
+        }
+    );
+}
+
+export async function deleteAccount(
+    accessToken: string,
+    data: DeleteAccountData
+): Promise<void> {
+    return authenticatedRequest<void>(
+        API_ENDPOINTS.AUTH.DELETE_ACCOUNT,
+        accessToken,
+        {
+            method: 'DELETE',
+            body: JSON.stringify(data),
+        }
+    );
 }
 
 export async function getCurrentUser(
