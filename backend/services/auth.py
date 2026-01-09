@@ -1,10 +1,11 @@
 from datetime import datetime, timedelta, timezone
+import hashlib
 from typing import Optional
 
+import bcrypt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
 from config import (
@@ -16,21 +17,56 @@ from config import (
 from database import get_db
 from models.user import User
 
-# Password hashing context
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 # OAuth2 scheme for Swagger UI integration
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
 
+def _bcrypt_input(password: str) -> bytes:
+    """Return bytes safe to pass into bcrypt.
+
+    bcrypt only considers the first 72 bytes of input; many implementations
+    also error on longer inputs. To avoid surprising truncation and crashes,
+    we pre-hash long passwords with SHA-256.
+    """
+    password_bytes = password.encode("utf-8")
+    if len(password_bytes) > 72:
+        return hashlib.sha256(password_bytes).digest()
+    return password_bytes
+
+
 def hash_password(password: str) -> str:
     """Hash a password using bcrypt."""
-    return pwd_context.hash(password)
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(_bcrypt_input(password), salt)
+    return hashed.decode("utf-8")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a password against its hash."""
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        plain_bytes = plain_password.encode("utf-8")
+        hashed_bytes = hashed_password.encode("utf-8")
+    except Exception:
+        return False
+
+    # Try the raw password first (works for existing users and for <=72 bytes).
+    try:
+        if bcrypt.checkpw(plain_bytes, hashed_bytes):
+            return True
+    except ValueError:
+        # bcrypt raises on >72-byte passwords; we'll try the pre-hash path below.
+        pass
+    except Exception:
+        return False
+
+    # If it's long, try the SHA-256 pre-hash variant.
+    if len(plain_bytes) > 72:
+        try:
+            return bcrypt.checkpw(hashlib.sha256(plain_bytes).digest(), hashed_bytes)
+        except Exception:
+            return False
+
+    return False
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
